@@ -275,7 +275,7 @@ def align_data_by_dates(data_dict: Dict[str, pd.DataFrame],
     volume_df = pd.DataFrame(volume_data)
     
     # Forward fill missing values (holidays, etc.)
-    price_df = price_df.fillna(method='ffill')
+    price_df = price_df.ffill()
     volume_df = volume_df.fillna(0)  # Zero volume on missing days
     
     # Drop any remaining rows with missing data
