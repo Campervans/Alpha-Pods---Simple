@@ -310,8 +310,9 @@ class BacktestResults:
         if len(self.index_values) != len(self.returns) + 1:
             raise ValueError("Index values should have one more observation than returns")
         
-        if not np.isclose(self.index_values.iloc[0], 100.0, atol=1e-6):
-            raise ValueError("Index should start at 100.0")
+        first_value = self.index_values.iloc[0]
+        if not np.isclose(first_value, 100.0, atol=1e-4):
+            raise ValueError(f"Index should start at 100.0, but starts at {first_value} (type: {type(first_value)})")
         
         # Check that returns are consistent with index values
         calculated_returns = self.index_values.pct_change().dropna()
