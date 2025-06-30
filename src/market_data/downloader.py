@@ -663,7 +663,7 @@ def create_sp100_since_2010() -> List[str]:
         'ORCL', 'ADBE', 'CRM', 'MDT', 'PM', 'BMY', 'T', 'HON',
         'QCOM', 'LOW', 'UPS', 'AMD', 'C', 'RTX', 'INTU', 'CAT',
         'AMGN', 'DE', 'GS', 'MO', 'AXP', 'BLK', 'GILD', 'MDLZ',
-        'MMM', 'CVS', 'SO', 'DUK'  # 60 stocks total
+        'MMM', 'CVS', 'SO'  # 59 stocks total (removed DUK to make room for TSLA)
     ]
     
     # Add Tesla (not in S&P 100 until later but requested to be included)

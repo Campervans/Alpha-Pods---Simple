@@ -19,7 +19,12 @@ import matplotlib.pyplot as plt
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from src.utils.schemas import UniverseConfig, OptimizationConfig, BacktestConfig
-from src.market_data.downloader import create_sp100_list, download_universe, download_benchmark_data
+from src.market_data.downloader import (
+    create_sp100_list, 
+    create_sp100_since_2010,
+    download_universe, 
+    download_benchmark_data
+)
 from src.market_data.universe import select_liquid_universe
 from src.backtesting.engine import CVaRIndexBacktest
 from src.backtesting.metrics import calculate_cvar, calculate_max_drawdown, calculate_turnover_stats
@@ -106,8 +111,8 @@ def main():
     # Step 1: Universe Selection
     print("\nStep 1: Selecting investment universe...")
     
-    # Get S&P 100 candidates
-    sp100_tickers = create_sp100_list()
+    # Get S&P 100 tickers
+    sp100_tickers = create_sp100_since_2010()
     
     # Select 60 most liquid stocks
     selected_universe = select_liquid_universe(

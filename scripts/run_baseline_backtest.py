@@ -18,7 +18,13 @@ import warnings
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from src.utils.schemas import UniverseConfig, OptimizationConfig, BacktestConfig
-from src.market_data.downloader import create_sp100_list, download_universe, save_price_data, download_benchmark_data
+from src.market_data.downloader import (
+    create_sp100_list, 
+    create_sp100_since_2010,
+    download_universe, 
+    save_price_data,
+    download_benchmark_data
+)
 from src.market_data.universe import select_liquid_universe, create_equal_weight_universe
 from src.backtesting.engine import CVaRIndexBacktest
 from src.backtesting.metrics import create_performance_report, create_monthly_returns_table, save_performance_report, plot_performance_comparison
@@ -70,8 +76,8 @@ def main():
     print("="*50)
     
     try:
-        # Get S&P 100 candidate list
-        sp100_tickers = create_sp100_list()
+        # Get S&P 100 tickers
+        sp100_tickers = create_sp100_since_2010()
         print(f"Loaded {len(sp100_tickers)} S&P 100 candidates")
         
         # Select liquid universe

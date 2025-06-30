@@ -7,6 +7,9 @@ import os
 import pandas as pd
 from pyfiglet import Figlet
 from rich.style import Style
+from rich.console import Console
+from rich.table import Table
+from rich import box
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -19,7 +22,6 @@ from src.gui.components import (
 )
 from src.gui.controllers import DataController, OptimizationController, ResultsController
 from rich.panel import Panel
-from rich.table import Table
 from rich.layout import Layout
 from rich.text import Text
 
@@ -172,7 +174,29 @@ class CVaRGUI:
             
             if result['success']:
                 show_success("Optimization completed!")
-                # Results will be available in the results section
+                
+                # Show results summary
+                console.print("\n[bold cyan]CVaR Optimization Results:[/bold cyan]")
+                results_table = Table(show_header=False, box=box.SIMPLE)
+                results_table.add_column("Metric", style="dim")
+                results_table.add_column("Value", style="bold green")
+                
+                results_table.add_row("Annual Return", f"{result['annual_return']:.2%}")
+                results_table.add_row("Sharpe Ratio", f"{result['sharpe_ratio']:.3f}")
+                results_table.add_row("Max Drawdown", f"{result['max_drawdown']:.2%}")
+                results_table.add_row("Final Index Value", f"{result['final_value']:.2f}")
+                results_table.add_row("Total Return", f"{result['total_return']:.2%}")
+                
+                console.print(results_table)
+                
+                # Check if performance analysis graph exists
+                graph_path = "/Users/james/Alpha-Pods---Simple/results/cvar_index_performance_analysis.png"
+                if os.path.exists(graph_path):
+                    console.print("\n[bold]📊 Performance Analysis Graph:[/bold]")
+                    console.print(f"[link=file://{graph_path}]{graph_path}[/link]")
+                    console.print("[dim]Click the link above to view the CVaR index vs benchmark comparison graph[/dim]")
+                else:
+                    console.print("\n[yellow]Note: Run 'Generate Missing Deliverables' in the Results menu to create performance graphs[/yellow]")
             else:
                 show_error(f"Optimization failed: {result['error']}")
         
@@ -612,7 +636,29 @@ class CVaRGUI:
             
             if result['success']:
                 show_success("Optimization completed!")
-                # Results are already shown in the visualization - no need for duplicate table
+                
+                # Show results summary
+                console.print("\n[bold cyan]CLEIR Optimization Results:[/bold cyan]")
+                results_table = Table(show_header=False, box=box.SIMPLE)
+                results_table.add_column("Metric", style="dim")
+                results_table.add_column("Value", style="bold green")
+                
+                results_table.add_row("Annual Return", f"{result['annual_return']:.2%}")
+                results_table.add_row("Sharpe Ratio", f"{result['sharpe_ratio']:.3f}")
+                results_table.add_row("Max Drawdown", f"{result['max_drawdown']:.2%}")
+                results_table.add_row("Final Index Value", f"{result['final_value']:.2f}")
+                results_table.add_row("Total Return", f"{result['total_return']:.2%}")
+                
+                console.print(results_table)
+                
+                # Check if performance analysis graph exists
+                graph_path = "/Users/james/Alpha-Pods---Simple/results/cleir_index_performance_analysis.png"
+                if os.path.exists(graph_path):
+                    console.print("\n[bold]📊 Performance Analysis Graph:[/bold]")
+                    console.print(f"[link=file://{graph_path}]{graph_path}[/link]")
+                    console.print("[dim]Click the link above to view the CLEIR index vs benchmark comparison graph[/dim]")
+                else:
+                    console.print("\n[yellow]Note: Run 'Generate Missing Deliverables' in the Results menu to create performance graphs[/yellow]")
             else:
                 show_error(f"Optimization failed: {result['error']}")
         
