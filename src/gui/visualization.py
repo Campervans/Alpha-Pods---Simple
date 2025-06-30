@@ -103,7 +103,7 @@ def plot_index_comparison(cleir_csv_path: str = "results/cleir_index_gui.csv",
     # Convert dates to numeric for plotting (days since start)
     days_since_start = (common_dates - common_dates[0]).days
     
-    # Plot both lines
+    # Plot both lines (reverted to original style)
     plt.plot(days_since_start, cleir_aligned.values, label='CLEIR Index', color='green')
     plt.plot(days_since_start, spy_normalized.values, label=f'{benchmark_ticker} (Normalized)', color='cyan')
     
@@ -115,7 +115,7 @@ def plot_index_comparison(cleir_csv_path: str = "results/cleir_index_gui.csv",
     # Add grid for better readability
     plt.grid(True, True)
     
-    # Set size for terminal display
+    # Set size for terminal display (reverted to original size)
     plt.plotsize(100, 30)
     
     # Show the plot

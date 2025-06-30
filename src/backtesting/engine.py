@@ -21,11 +21,12 @@ class CVaRIndexBacktest:
     # runs the backtest simulation
     
     def __init__(self, price_data: PriceData, optimization_config: OptimizationConfig, 
-                 asset_tickers: Optional[List[str]] = None):
+                 asset_tickers: Optional[List[str]] = None, show_optimization_progress: bool = False):
         self.price_data = price_data
         self.optimization_config = optimization_config
         self.returns = price_data.get_returns(method='simple')
         self.rebalance_events: List[RebalanceEvent] = []
+        self.show_optimization_progress = show_optimization_progress
         
         # For CLEIR: separate assets from benchmark
         if asset_tickers is not None:
@@ -238,14 +239,14 @@ class CVaRIndexBacktest:
                     hist_asset_returns, 
                     hist_benchmark_returns,
                     self.optimization_config,
-                    verbose=True  # Enable rich progress display
+                    verbose=self.show_optimization_progress  # Use the flag
                 )
             else:
                 # Standard CVaR optimization
                 optimal_weights, solver_info = solve_cvar(
                     hist_asset_returns, 
                     self.optimization_config,
-                    verbose=True  # Enable rich progress display
+                    verbose=self.show_optimization_progress  # Use the flag
                 )
             
             solve_time = time.time() - start_time

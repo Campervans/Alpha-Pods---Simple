@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 import os
 import pandas as pd
+from pyfiglet import Figlet
+from rich.style import Style
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -39,6 +41,16 @@ class CVaRGUI:
     
     def show_main_menu(self):
         """Display main menu."""
+        # Create ASCII banner
+        figlet = Figlet(font='standard')
+        ascii_banner = figlet.renderText('eToro - AlphaPod')
+        
+        # eToro green color style
+        etoro_green = Style(color="#6ebe44")  # eToro brand green
+        
+        # Print the banner in eToro green
+        console.print(ascii_banner, style=etoro_green)
+        
         console.print(create_header(
             "CVaR/CLEIR Portfolio Optimization",
             "Terminal GUI v0.1.0"
@@ -123,6 +135,10 @@ class CVaRGUI:
             
             if result['success']:
                 show_success(f"Downloaded {result['n_assets']} assets from {result['start_date']} to {result['end_date']}")
+                if 'warning' in result:
+                    show_info(f"⚠️  {result['warning']}")
+                if 'failed_tickers' in result and result['failed_tickers']:
+                    show_info(f"Note: Portfolio optimization will continue with {result['n_assets']} available assets")
             else:
                 show_error(f"Download failed: {result['error']}")
         
@@ -156,19 +172,11 @@ class CVaRGUI:
             
             if result['success']:
                 show_success("Optimization completed!")
-                console.print(create_data_table("Results", {
-                    'Annual Return': f"{result['annual_return']:.2%}",
-                    'Sharpe Ratio': f"{result['sharpe_ratio']:.3f}",
-                    'Max Drawdown': f"{result['max_drawdown']:.2%}",
-                    'Final Index Value': f"{result.get('final_value', 0):.2f}",
-                    'Total Return': f"{result.get('total_return', 0):.2%}"
-                }))
+                # Results will be available in the results section
             else:
                 show_error(f"Optimization failed: {result['error']}")
         
         console.input("\nPress Enter to continue...")
-    
-
     
     def show_about(self):
         """Show about screen."""
@@ -600,13 +608,7 @@ class CVaRGUI:
             
             if result['success']:
                 show_success("Optimization completed!")
-                console.print(create_data_table("Results", {
-                    'Annual Return': f"{result['annual_return']:.2%}",
-                    'Sharpe Ratio': f"{result['sharpe_ratio']:.3f}",
-                    'Max Drawdown': f"{result['max_drawdown']:.2%}",
-                    'Final Index Value': f"{result.get('final_value', 0):.2f}",
-                    'Total Return': f"{result.get('total_return', 0):.2%}"
-                }))
+                # Results are already shown in the visualization - no need for duplicate table
             else:
                 show_error(f"Optimization failed: {result['error']}")
         

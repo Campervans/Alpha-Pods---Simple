@@ -31,7 +31,8 @@ def test_rich_progress():
         max_weight=0.05,
         min_weight=0.0,
         sparsity_bound=1.2,  # For CLEIR
-        solver="CLARABEL"
+        solver="CLARABEL",
+        benchmark_ticker="SPY"  # Required for CLEIR
     )
     
     console.print("\n[bold magenta]Testing CLEIR Optimization with Rich Progress[/bold magenta]")

@@ -48,19 +48,43 @@ class DataController:
     def download_data(self, tickers: List[str], start: str, end: str) -> Dict[str, Any]:
         """Download price data for tickers."""
         try:
-            price_data = download_universe(
-                tickers, start, end, 
-                min_data_points=100,
-                use_cache=True,
-                cache_dir=self.cache_dir
-            )
-            return {
+            # Import for detailed error tracking
+            from ..market_data.downloader import download_multiple_tickers, align_data_by_dates
+            
+            # Download with detailed tracking
+            print(f"Downloading {len(tickers)} tickers...")
+            raw_data = download_multiple_tickers(tickers, start, end, max_workers=5, progress_bar=True)
+            
+            # Track success/failure
+            successful_tickers = list(raw_data.keys())
+            failed_tickers = [t for t in tickers if t not in successful_tickers]
+            
+            if not raw_data:
+                return {'success': False, 'error': 'No data downloaded successfully'}
+            
+            # Align data
+            price_df, volume_df = align_data_by_dates(raw_data, min_data_points=100)
+            
+            if price_df.empty:
+                return {'success': False, 'error': 'No tickers have sufficient aligned data'}
+            
+            # Create result with detailed information
+            result = {
                 'success': True,
-                'n_assets': price_data.n_assets,
-                'start_date': price_data.start_date.strftime('%Y-%m-%d'),
-                'end_date': price_data.end_date.strftime('%Y-%m-%d'),
-                'n_periods': price_data.n_periods
+                'n_assets': len(price_df.columns),
+                'start_date': price_df.index[0].strftime('%Y-%m-%d'),
+                'end_date': price_df.index[-1].strftime('%Y-%m-%d'),
+                'n_periods': len(price_df),
+                'successful_tickers': successful_tickers,
+                'failed_tickers': failed_tickers
             }
+            
+            # Add warning if some tickers failed
+            if failed_tickers:
+                result['warning'] = f"{len(failed_tickers)} tickers failed: {', '.join(failed_tickers[:5])}{'...' if len(failed_tickers) > 5 else ''}"
+            
+            return result
+            
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
@@ -134,8 +158,8 @@ class OptimizationController:
             valid_tickers, filter_results = apply_universe_filters(price_data, universe_config)
             
             if len(valid_tickers) < universe_config.n_stocks:
-                print(f"Warning: Only {len(valid_tickers)} tickers passed filters, "
-                      f"requested {universe_config.n_stocks}")
+                console.print(f"[orange]Warning: Only {len(valid_tickers)} tickers passed filters, "
+                      f"requested {universe_config.n_stocks}[/orange]")
                 selected_tickers = valid_tickers
             else:
                 # Calculate liquidity scores for valid tickers
@@ -151,10 +175,8 @@ class OptimizationController:
                 # Select top N most liquid tickers
                 selected_tickers = liquidity_scores.nlargest(universe_config.n_stocks).index.tolist()
                 
-                print(f"Selected universe statistics:")
-                print(f"  Top liquidity score: ${liquidity_scores.max():,.0f}")
-                print(f"  Bottom liquidity score: ${liquidity_scores.nsmallest(universe_config.n_stocks).iloc[-1]:,.0f}")
-                print(f"  Median liquidity score: ${liquidity_scores.median():,.0f}")
+                # Clean output - just show selection completed
+                console.print(f"[dim]Selected {len(selected_tickers)} most liquid stocks[/dim]")
             
             # Filter price_data to only include selected tickers
             liquid_universe = PriceData(
@@ -167,7 +189,8 @@ class OptimizationController:
             # Create and run backtest
             backtest = CVaRIndexBacktest(
                 price_data=liquid_universe,
-                optimization_config=optimization_config
+                optimization_config=optimization_config,
+                show_optimization_progress=True  # Show progress in GUI
             )
             
             results = backtest.run_backtest(backtest_config)
@@ -272,8 +295,8 @@ class OptimizationController:
             valid_tickers, filter_results = apply_universe_filters(asset_price_data, universe_config)
             
             if len(valid_tickers) < universe_config.n_stocks:
-                print(f"Warning: Only {len(valid_tickers)} tickers passed filters, "
-                      f"requested {universe_config.n_stocks}")
+                console.print(f"[orange]Warning: Only {len(valid_tickers)} tickers passed filters, "
+                      f"requested {universe_config.n_stocks}[/orange]")
                 selected_tickers = valid_tickers
             else:
                 # Calculate liquidity scores for valid tickers
@@ -289,10 +312,8 @@ class OptimizationController:
                 # Select top N most liquid tickers
                 selected_tickers = liquidity_scores.nlargest(universe_config.n_stocks).index.tolist()
                 
-                print(f"Selected universe statistics:")
-                print(f"  Top liquidity score: ${liquidity_scores.max():,.0f}")
-                print(f"  Bottom liquidity score: ${liquidity_scores.nsmallest(universe_config.n_stocks).iloc[-1]:,.0f}")
-                print(f"  Median liquidity score: ${liquidity_scores.median():,.0f}")
+                # Clean output - just show selection completed
+                console.print(f"[dim]Selected {len(selected_tickers)} most liquid stocks[/dim]")
             
             # Create universe with selected assets + benchmark
             if optimization_config.benchmark_ticker and optimization_config.benchmark_ticker in price_data.tickers:
@@ -317,7 +338,8 @@ class OptimizationController:
             backtest = CVaRIndexBacktest(
                 price_data=liquid_universe,
                 optimization_config=optimization_config,
-                asset_tickers=asset_tickers
+                asset_tickers=asset_tickers,
+                show_optimization_progress=True  # Show progress in GUI
             )
             
             results = backtest.run_backtest(backtest_config)

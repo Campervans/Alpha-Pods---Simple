@@ -17,6 +17,7 @@ def check_and_install_dependencies():
     try:
         import rich
         import click
+        import pyfiglet
         print("✓ Dependencies already installed")
         return True
     except ImportError:
@@ -26,13 +27,13 @@ def check_and_install_dependencies():
         try:
             subprocess.check_call([
                 sys.executable, "-m", "pip", "install", 
-                "rich>=13.0.0", "click>=8.0.0", "-q"
+                "rich>=13.0.0", "click>=8.0.0", "pyfiglet>=0.8.0", "-q"
             ])
             print("✓ Dependencies installed successfully")
             return True
         except subprocess.CalledProcessError:
             print("✗ Failed to install dependencies")
-            print("Please install manually: pip install rich>=13.0.0 click>=8.0.0")
+            print("Please install manually: pip install rich>=13.0.0 click>=8.0.0 pyfiglet>=0.8.0")
             return False
 
 
