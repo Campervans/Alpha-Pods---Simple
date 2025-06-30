@@ -15,7 +15,9 @@ from src.market_data.downloader import (
     download_universe, 
     download_benchmark_data,
     save_ticker_data_to_pickle,
-    load_ticker_data_from_pickle
+    load_ticker_data_from_pickle,
+    create_sp100_since_2010,
+    download_single_ticker
 )
 from src.market_data.universe import select_liquid_universe, apply_universe_filters, calculate_liquidity_scores
 from src.backtesting.engine import CVaRIndexBacktest
@@ -99,9 +101,9 @@ class DataController:
         except Exception:
             return False
     
-    def get_sp100_tickers(self) -> List[str]:
-        """Get S&P 100 ticker list."""
-        return create_sp100_list()
+    def get_universe_list(self) -> List[str]:
+        """Get the list of tickers in the universe."""
+        return create_sp100_since_2010()
 
 
 class OptimizationController:
@@ -139,7 +141,28 @@ class OptimizationController:
             )
             
             # Get S&P 100 tickers
-            tickers = create_sp100_list()
+            tickers = create_sp100_since_2010()
+            
+            # Use universe selection if enabled
+            if config.get('universe_selection_enabled', False):
+                universe_config = UniverseConfig(
+                    n_stocks=config.get('universe_size', 60),
+                    lookback_days=252,
+                    min_trading_days=200,
+                    min_price=5.0,
+                    metric="dollar_volume"
+                )
+                
+                # Get recent data for universe selection
+                end_date = config.get('end_date', '2024-12-31')
+                start_date = (pd.to_datetime(end_date) - pd.Timedelta(days=365)).strftime('%Y-%m-%d')
+                
+                tickers = select_liquid_universe(
+                    tickers,
+                    universe_config,
+                    start_date,
+                    end_date
+                )
             
             # Download price data
             price_data = download_universe(
@@ -252,7 +275,28 @@ class OptimizationController:
             )
             
             # Get S&P 100 tickers
-            tickers = create_sp100_list()
+            tickers = create_sp100_since_2010()
+            
+            # Use universe selection if enabled
+            if config.get('universe_selection_enabled', False):
+                universe_config = UniverseConfig(
+                    n_stocks=config.get('universe_size', 60),
+                    lookback_days=252,
+                    min_trading_days=200,
+                    min_price=5.0,
+                    metric="dollar_volume"
+                )
+                
+                # Get recent data for universe selection
+                end_date = config.get('end_date', '2024-12-31')
+                start_date = (pd.to_datetime(end_date) - pd.Timedelta(days=365)).strftime('%Y-%m-%d')
+                
+                tickers = select_liquid_universe(
+                    tickers,
+                    universe_config,
+                    start_date,
+                    end_date
+                )
             
             # Download price data
             price_data = download_universe(

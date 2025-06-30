@@ -124,7 +124,7 @@ class CVaRGUI:
         end_date = get_text_input("End date (YYYY-MM-DD)", default="2024-12-31")
         
         # Get S&P 100 tickers
-        tickers = self.data_controller.get_sp100_tickers()
+        tickers = self.data_controller.get_universe_list()
         show_info(f"Will download {len(tickers)} tickers")
         
         if confirm_action("Proceed with download?"):
