@@ -18,11 +18,10 @@ from ..utils.schemas import PriceData
 # PROXY CONFIGURATION - CREDENTIALS ARE INTENTIONALLY HARDCODED, DO NOT CHANGE
 PROXY_USERNAME = 'sp7lr99xhd'
 PROXY_PASSWORD = '7Xtywa2k3o0oxoViLX'
-PROXY_PORTS = [
-    10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010,
-    10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019, 10020,
-    10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029, 10030
-]
+
+# Load proxy ports from CSV - now supports 100 proxies instead of hardcoded 30
+from ..utils.proxy_utils import load_proxies_from_csv
+PROXY_PORTS = load_proxies_from_csv()
 
 
 def get_random_proxy():
@@ -47,9 +46,43 @@ def test_proxy(proxy_dict):
 
 
 def download_single_ticker(ticker: str, start: str, end: str, 
-                          retry_count: int = 3, delay: float = 1.0) -> pd.DataFrame:
+                          retry_count: int = 3, delay: float = 1.0,
+                          use_cache: bool = True, cache_dir: str = "data/raw") -> pd.DataFrame:
     # download one ticker with retries and rate limit handling
     
+    # STEP 2: Smart cache check with validation
+    if use_cache:
+        # No longer need complex validation, pickle format preserves data types
+        cached_df = load_ticker_data_from_pickle(ticker, cache_dir)
+        
+        if cached_df is not None:
+            # Check if the cached data covers the requested date range
+            start_date = pd.to_datetime(start)
+            end_date = pd.to_datetime(end)
+            
+            # Ensure index is a DatetimeIndex before proceeding
+            if isinstance(cached_df.index, pd.DatetimeIndex):
+                # More flexible date range check - allow for market holidays at start
+                # Check if cache covers the requested period (with some tolerance for holidays)
+                cache_start = cached_df.index[0]
+                cache_end = cached_df.index[-1]
+                
+                # Allow up to 5 days difference at start (for holidays/weekends)
+                start_ok = cache_start <= start_date + pd.Timedelta(days=5)
+                end_ok = cache_end >= end_date - pd.Timedelta(days=5)
+                
+                if not cached_df.empty and start_ok and end_ok:
+                    # Filter to the exact requested date range
+                    mask = (cached_df.index >= start_date) & (cached_df.index <= end_date)
+                    filtered_data = cached_df.loc[mask]
+                    
+                    if not filtered_data.empty:
+                        print(f"✓ {ticker} loaded from pickle cache ({len(filtered_data)} days)")
+                        return filtered_data
+            else:
+                print(f"⚠️  {ticker}: Cached data has an invalid index type, re-downloading.")
+    
+    # If cache miss or invalid, proceed with download
     # Save original proxy environment variables
     original_http_proxy = os.environ.get('HTTP_PROXY', '')
     original_https_proxy = os.environ.get('HTTPS_PROXY', '')
@@ -200,41 +233,99 @@ def download_single_ticker(ticker: str, start: str, end: str,
 def download_multiple_tickers(tickers: List[str], start: str, end: str, 
                             max_workers: int = 5, progress_bar: bool = True,
                             batch_delay: float = 0.5) -> Dict[str, pd.DataFrame]:
-    # download multiple tickers with rate limit protection
-    # Reduced max_workers from 10 to 5 to avoid rate limits
+    """
+    Download multiple tickers using yfinance's thread-safe batch downloading.
+    This avoids the race condition issues with yfinance's shared global dictionary.
+    """
     results = {}
     
     # Process in smaller batches to avoid rate limiting
-    batch_size = 10
+    batch_size = 20  # Can use larger batches since yfinance handles threading internally
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         
-        # parallel downloads within batch
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # submit all
-            future_to_ticker = {
-                executor.submit(download_single_ticker, ticker, start, end): ticker
-                for ticker in batch
-            }
+        if progress_bar:
+            print(f"Processing batch {i//batch_size + 1}/{(len(tickers) + batch_size - 1)//batch_size}: {len(batch)} tickers")
+        
+        try:
+            # Use yfinance's built-in batch download which is thread-safe
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                
+                # Download all tickers in batch using yfinance's internal threading
+                batch_data = yf.download(
+                    batch,  # Pass list of tickers
+                    start=start,
+                    end=end,
+                    auto_adjust=True,
+                    progress=progress_bar,
+                    group_by='ticker'  # Important: group by ticker to get separate columns
+                )
             
-            # process results
-            if progress_bar:
-                iterator = tqdm(as_completed(future_to_ticker), 
-                              total=len(batch), 
-                              desc=f"Batch {i//batch_size + 1}/{(len(tickers) + batch_size - 1)//batch_size}")
+            # Process the batch results
+            if not batch_data.empty:
+                # Handle single ticker case (no MultiIndex)
+                if len(batch) == 1:
+                    ticker = batch[0]
+                    if not batch_data.empty and 'Close' in batch_data.columns and 'Volume' in batch_data.columns:
+                        result = batch_data[['Close', 'Volume']].copy()
+                        result = result.dropna()
+                        result['Volume'] = result['Volume'].clip(lower=0)
+                        if (result['Close'] > 0).all():
+                            results[ticker] = result
+                            if progress_bar:
+                                print(f"✓ {ticker}: {len(result)} days")
+                        else:
+                            print(f"✗ {ticker}: Invalid price data")
+                    else:
+                        print(f"✗ {ticker}: Missing required columns")
+                
+                # Handle multiple tickers case (MultiIndex columns)
+                elif isinstance(batch_data.columns, pd.MultiIndex):
+                    for ticker in batch:
+                        try:
+                            # Extract data for this ticker
+                            ticker_data = batch_data[ticker] if ticker in batch_data.columns.get_level_values(0) else None
+                            
+                            if ticker_data is not None and not ticker_data.empty:
+                                if 'Close' in ticker_data.columns and 'Volume' in ticker_data.columns:
+                                    result = ticker_data[['Close', 'Volume']].copy()
+                                    result = result.dropna()
+                                    result['Volume'] = result['Volume'].clip(lower=0)
+                                    if len(result) > 0 and (result['Close'] > 0).all():
+                                        results[ticker] = result
+                                        if progress_bar:
+                                            print(f"✓ {ticker}: {len(result)} days")
+                                    else:
+                                        print(f"✗ {ticker}: Invalid price data")
+                                else:
+                                    print(f"✗ {ticker}: Missing required columns")
+                            else:
+                                print(f"✗ {ticker}: No data returned")
+                        except Exception as e:
+                            print(f"✗ {ticker}: Error processing - {e}")
+                
+                else:
+                    print(f"Unexpected data structure for batch: {batch}")
+            
             else:
-                iterator = as_completed(future_to_ticker)
-            
-            for future in iterator:
-                ticker = future_to_ticker[future]
+                print(f"No data returned for batch: {batch}")
+                
+        except Exception as e:
+            print(f"Error downloading batch {batch}: {e}")
+            # Fallback to individual downloads for this batch
+            print(f"Falling back to individual downloads for batch...")
+            for ticker in batch:
                 try:
-                    data = future.result()
+                    data = download_single_ticker(ticker, start, end, use_cache=True, cache_dir="data/raw")
                     if not data.empty:
                         results[ticker] = data
+                        if progress_bar:
+                            print(f"✓ {ticker}: {len(data)} days (fallback)")
                     else:
-                        print(f"No data for {ticker}")
-                except Exception as e:
-                    print(f"Error: {ticker}: {e}")
+                        print(f"✗ {ticker}: No data (fallback)")
+                except Exception as fallback_e:
+                    print(f"✗ {ticker}: Error in fallback - {fallback_e}")
         
         # Delay between batches to avoid rate limiting
         if i + batch_size < len(tickers):
@@ -342,11 +433,19 @@ def download_universe(tickers: List[str], start: str, end: str,
     if use_cache:
         print(f"Checking cache in {cache_dir}...")
         for ticker in tickers:
-            cached_data = load_ticker_data_from_csv(ticker, cache_dir)
+            cached_data = load_ticker_data_from_pickle(ticker, cache_dir)
             if cached_data is not None:
-                # Check if cached data covers the requested period
-                if (cached_data.index[0] <= pd.to_datetime(start) and 
-                    cached_data.index[-1] >= pd.to_datetime(end)):
+                # Check if cached data covers the requested period (with tolerance for holidays)
+                start_date = pd.to_datetime(start)
+                end_date = pd.to_datetime(end)
+                cache_start = cached_data.index[0]
+                cache_end = cached_data.index[-1]
+                
+                # Allow up to 5 days difference at start (for holidays/weekends)
+                start_ok = cache_start <= start_date + pd.Timedelta(days=5)
+                end_ok = cache_end >= end_date - pd.Timedelta(days=5)
+                
+                if start_ok and end_ok:
                     # Filter to requested date range
                     mask = (cached_data.index >= start) & (cached_data.index <= end)
                     filtered_data = cached_data[mask]
@@ -367,7 +466,7 @@ def download_universe(tickers: List[str], start: str, end: str,
         # Save to cache and add to results
         for ticker, data in new_data.items():
             if use_cache:
-                save_ticker_data_to_csv(ticker, data, cache_dir)
+                save_ticker_data_to_pickle(ticker, data, cache_dir)
                 print(f"✓ Saved {ticker} to cache")
             data_dict[ticker] = data
     
@@ -413,7 +512,7 @@ def download_benchmark_data(benchmark_tickers: List[str], start: str, end: str) 
     benchmark_data = {}
     
     for ticker in benchmark_tickers:
-        data = download_single_ticker(ticker, start, end)
+        data = download_single_ticker(ticker, start, end, use_cache=True, cache_dir="data/raw")
         if not data.empty:
             benchmark_data[ticker] = data['Close']
             print(f"Downloaded {len(data)} days for {ticker}")
@@ -536,7 +635,7 @@ def create_sp100_list() -> List[str]:
         'AMGN', 'DE', 'ISRG', 'BKNG', 'GS', 'TGT', 'MO', 'AXP', 'SYK',
         'LRCX', 'BLK', 'GILD', 'MDLZ', 'ADI', 'ADP', 'SBUX', 'MMM', 'TJX',
         'VRTX', 'CVS', 'ZTS', 'CHTR', 'MU', 'FIS', 'PYPL', 'SO', 'CI',
-        'NOW', 'REGN', 'SHW', 'DUK', 'BSX', 'CB', 'ATVI', 'EQIX', 'ICE',
+        'NOW', 'REGN', 'SHW', 'DUK', 'BSX', 'CB', 'EQIX', 'ICE',
         'CL', 'CSX', 'WM', 'MMC', 'EL', 'GD', 'KLAC', 'APH', 'USB', 'PGR',
         'AON', 'CME', 'MCO', 'FDX', 'NSC', 'ITW', 'SLB', 'HUM', 'GE', 'EMR'
     ]
@@ -545,31 +644,35 @@ def create_sp100_list() -> List[str]:
     return sp100_tickers
 
 
-def save_ticker_data_to_csv(ticker: str, data: pd.DataFrame, output_dir: str = "data/raw"):
-    """Save individual ticker data to CSV file."""
+def save_ticker_data_to_pickle(ticker: str, data: pd.DataFrame, output_dir: str = "data/raw"):
+    """Save individual ticker data to a pickle file."""
     os.makedirs(output_dir, exist_ok=True)
     
-    # Create filename with ticker and date range
-    start_date = data.index[0].strftime('%Y%m%d')
-    end_date = data.index[-1].strftime('%Y%m%d')
-    filename = f"{ticker}_{start_date}_{end_date}.csv"
+    # Create filename with ticker and a simple .pkl extension
+    # We don't need date ranges in the name anymore, we'll find the right file by ticker
+    filename = f"{ticker}.pkl"
     filepath = os.path.join(output_dir, filename)
     
-    # Save to CSV
-    data.to_csv(filepath)
+    # Save to pickle
+    data.to_pickle(filepath)
     return filepath
 
 
-def load_ticker_data_from_csv(ticker: str, output_dir: str = "data/raw") -> Optional[pd.DataFrame]:
-    """Load ticker data from CSV if it exists."""
-    # Look for files matching the ticker pattern
-    if os.path.exists(output_dir):
-        for filename in os.listdir(output_dir):
-            if filename.startswith(f"{ticker}_") and filename.endswith(".csv"):
-                filepath = os.path.join(output_dir, filename)
-                try:
-                    df = pd.read_csv(filepath, index_col=0, parse_dates=True)
-                    return df
-                except Exception as e:
-                    print(f"Error loading {filepath}: {e}")
+def load_ticker_data_from_pickle(ticker: str, output_dir: str = "data/raw") -> Optional[pd.DataFrame]:
+    """Load ticker data from a pickle file if it exists."""
+    filename = f"{ticker}.pkl"
+    filepath = os.path.join(output_dir, filename)
+    
+    if os.path.exists(filepath):
+        try:
+            df = pd.read_pickle(filepath)
+            return df
+        except Exception as e:
+            print(f"Error loading pickle cache file {filepath}: {e}")
+            # Attempt to delete corrupted file so it can be re-downloaded
+            try:
+                os.remove(filepath)
+                print(f"Removed corrupted cache file: {filepath}")
+            except OSError as del_e:
+                print(f"Error removing corrupted cache file: {del_e}")
     return None 

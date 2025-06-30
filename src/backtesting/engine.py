@@ -71,14 +71,18 @@ class CVaRIndexBacktest:
             # calc perf since last rebal
             if prev_rebal_date is not None:
                 asset_returns = backtest_returns[self.asset_tickers]
+                # Get the last known index value to ensure continuity
+                last_known_value = index_values[-1] if index_values else config.initial_capital
                 period_performance = self._calculate_period_performance(
-                    current_weights, asset_returns, prev_rebal_date, rebal_date
+                    current_weights, asset_returns, prev_rebal_date, rebal_date,
+                    last_index_value=last_known_value
                 )
                 
-                # update index vals
+                # update index vals, excluding the first value which is the previous period's close
                 period_dates, period_values = period_performance
-                index_values.extend(period_values[1:])  # skip first
-                portfolio_dates.extend(period_dates[1:])
+                if len(period_values) > 1:
+                    index_values.extend(period_values[1:])
+                    portfolio_dates.extend(period_dates[1:])
             
             # drift adjusted weights (important for accurate turnover calcs!)
             if prev_rebal_date is not None:
@@ -238,15 +242,16 @@ class CVaRIndexBacktest:
     def _calculate_period_performance(self, weights: np.ndarray,
                                      returns: pd.DataFrame,
                                      start_date: pd.Timestamp,
-                                     end_date: pd.Timestamp) -> tuple[List, List]:
+                                     end_date: pd.Timestamp,
+                                     last_index_value: float = 100.0) -> tuple[List, List]:
         # calc portfolio perf over period
         try:
             period_returns = returns.loc[start_date:end_date]
         except KeyError:
-            return [start_date, end_date], [100.0, 100.0]
+            return [start_date, end_date], [last_index_value, last_index_value]
         
         if len(period_returns) == 0:
-            return [start_date, end_date], [100.0, 100.0]
+            return [start_date, end_date], [last_index_value, last_index_value]
         
         # daily port returns
         portfolio_returns = np.dot(period_returns.values, weights)
@@ -254,8 +259,8 @@ class CVaRIndexBacktest:
         # cumulative
         cumulative_values = np.cumprod(1 + portfolio_returns)
         
-        # prepend starting val
-        all_values = np.concatenate([[1.0], cumulative_values])
+        # Prepend starting value, scaled by the last known index value
+        all_values = np.concatenate([[last_index_value], last_index_value * cumulative_values])
         all_dates = [start_date] + period_returns.index.tolist()
         
         return all_dates, all_values.tolist()

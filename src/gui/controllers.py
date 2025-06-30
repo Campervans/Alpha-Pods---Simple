@@ -13,12 +13,12 @@ from src.market_data.downloader import (
     create_sp100_list, 
     download_universe, 
     download_benchmark_data,
-    save_ticker_data_to_csv,
-    load_ticker_data_from_csv
+    save_ticker_data_to_pickle,
+    load_ticker_data_from_pickle
 )
-from src.market_data.universe import select_liquid_universe
+from src.market_data.universe import select_liquid_universe, apply_universe_filters, calculate_liquidity_scores
 from src.backtesting.engine import CVaRIndexBacktest
-from src.utils.schemas import UniverseConfig, OptimizationConfig, BacktestConfig
+from src.utils.schemas import UniverseConfig, OptimizationConfig, BacktestConfig, PriceData
 from src.optimization.cvar_solver import solve_cvar
 from src.optimization.cleir_solver import solve_cleir
 
@@ -125,32 +125,61 @@ class OptimizationController:
                 cache_dir="data/raw"
             )
             
-            # Select liquid universe
-            liquid_universe = select_liquid_universe(
-                price_data, 
-                universe_config, 
-                backtest_config.start_date
+            # Apply universe filtering directly on the downloaded data
+            # instead of calling select_liquid_universe which downloads again
+            
+            # Apply filters to get valid tickers
+            valid_tickers, filter_results = apply_universe_filters(price_data, universe_config)
+            
+            if len(valid_tickers) < universe_config.n_stocks:
+                print(f"Warning: Only {len(valid_tickers)} tickers passed filters, "
+                      f"requested {universe_config.n_stocks}")
+                selected_tickers = valid_tickers
+            else:
+                # Calculate liquidity scores for valid tickers
+                valid_price_data = PriceData(
+                    tickers=valid_tickers,
+                    dates=price_data.dates,
+                    prices=price_data.prices[valid_tickers],
+                    volumes=price_data.volumes[valid_tickers] if price_data.volumes is not None else None
+                )
+                
+                liquidity_scores = calculate_liquidity_scores(valid_price_data, universe_config)
+                
+                # Select top N most liquid tickers
+                selected_tickers = liquidity_scores.nlargest(universe_config.n_stocks).index.tolist()
+                
+                print(f"Selected universe statistics:")
+                print(f"  Top liquidity score: ${liquidity_scores.max():,.0f}")
+                print(f"  Bottom liquidity score: ${liquidity_scores.nsmallest(universe_config.n_stocks).iloc[-1]:,.0f}")
+                print(f"  Median liquidity score: ${liquidity_scores.median():,.0f}")
+            
+            # Filter price_data to only include selected tickers
+            liquid_universe = PriceData(
+                tickers=selected_tickers,
+                dates=price_data.dates,
+                prices=price_data.prices[selected_tickers],
+                volumes=price_data.volumes[selected_tickers] if price_data.volumes is not None else None
             )
             
             # Create and run backtest
             backtest = CVaRIndexBacktest(
                 price_data=liquid_universe,
-                optimization_config=optimization_config,
-                backtest_config=backtest_config
+                optimization_config=optimization_config
             )
             
-            results = backtest.run()
+            results = backtest.run_backtest(backtest_config)
             
             # Calculate metrics
-            total_return = (results['index_values'][-1] / 100.0) - 1.0
-            annual_return = annualize_return(total_return, len(results['returns']), 252)
-            sharpe_ratio = calculate_sharpe_ratio(results['returns'], 0.0, 252)
-            max_dd = calculate_max_drawdown(results['returns'])
+            total_return = (results.index_values.iloc[-1] / 100.0) - 1.0
+            annual_return = annualize_return(total_return, len(results.returns), 252)
+            sharpe_ratio = calculate_sharpe_ratio(results.returns, 0.0, 252)
+            max_dd = calculate_max_drawdown(results.returns)
             
             # Save results
             results_df = pd.DataFrame({
-                'Date': results['dates'],
-                'Index_Value': results['index_values']
+                'Date': results.index_values.index,
+                'Index_Value': results.index_values.values
             })
             results_df.to_csv('results/cvar_index_gui.csv', index=False)
             
@@ -159,7 +188,7 @@ class OptimizationController:
                 'annual_return': annual_return,
                 'sharpe_ratio': sharpe_ratio,
                 'max_drawdown': max_dd,
-                'final_value': results['index_values'][-1],
+                'final_value': results.index_values.iloc[-1],
                 'total_return': total_return
             }
             
@@ -217,39 +246,89 @@ class OptimizationController:
                     backtest_config.end_date
                 )
                 
-                # Add benchmark to price data
+                # Add benchmark to price data if available
                 if optimization_config.benchmark_ticker in benchmark_data:
                     benchmark_prices = benchmark_data[optimization_config.benchmark_ticker]
-                    price_data.prices[optimization_config.benchmark_ticker] = benchmark_prices.reindex(price_data.dates)
-                    price_data.volumes[optimization_config.benchmark_ticker] = pd.Series(1e6, index=price_data.dates)
+                    # Align benchmark with price_data dates
+                    aligned_benchmark = benchmark_prices.reindex(price_data.dates).ffill()
+                    price_data.prices[optimization_config.benchmark_ticker] = aligned_benchmark
+                    if price_data.volumes is not None:
+                        price_data.volumes[optimization_config.benchmark_ticker] = pd.Series(1e6, index=price_data.dates)
                     price_data.tickers = price_data.tickers + [optimization_config.benchmark_ticker]
             
-            # Select liquid universe
-            liquid_universe = select_liquid_universe(
-                price_data, 
-                universe_config, 
-                backtest_config.start_date
+            # Apply universe filtering directly on the downloaded data
+            # Apply filters to get valid tickers (exclude benchmark from filtering)
+            asset_tickers_only = [t for t in price_data.tickers if t != optimization_config.benchmark_ticker]
+            asset_price_data = PriceData(
+                tickers=asset_tickers_only,
+                dates=price_data.dates,
+                prices=price_data.prices[asset_tickers_only],
+                volumes=price_data.volumes[asset_tickers_only] if price_data.volumes is not None else None
             )
+            
+            valid_tickers, filter_results = apply_universe_filters(asset_price_data, universe_config)
+            
+            if len(valid_tickers) < universe_config.n_stocks:
+                print(f"Warning: Only {len(valid_tickers)} tickers passed filters, "
+                      f"requested {universe_config.n_stocks}")
+                selected_tickers = valid_tickers
+            else:
+                # Calculate liquidity scores for valid tickers
+                valid_price_data = PriceData(
+                    tickers=valid_tickers,
+                    dates=price_data.dates,
+                    prices=price_data.prices[valid_tickers],
+                    volumes=price_data.volumes[valid_tickers] if price_data.volumes is not None else None
+                )
+                
+                liquidity_scores = calculate_liquidity_scores(valid_price_data, universe_config)
+                
+                # Select top N most liquid tickers
+                selected_tickers = liquidity_scores.nlargest(universe_config.n_stocks).index.tolist()
+                
+                print(f"Selected universe statistics:")
+                print(f"  Top liquidity score: ${liquidity_scores.max():,.0f}")
+                print(f"  Bottom liquidity score: ${liquidity_scores.nsmallest(universe_config.n_stocks).iloc[-1]:,.0f}")
+                print(f"  Median liquidity score: ${liquidity_scores.median():,.0f}")
+            
+            # Create universe with selected assets + benchmark
+            if optimization_config.benchmark_ticker and optimization_config.benchmark_ticker in price_data.tickers:
+                all_tickers = selected_tickers + [optimization_config.benchmark_ticker]
+                liquid_universe = PriceData(
+                    tickers=all_tickers,
+                    dates=price_data.dates,
+                    prices=price_data.prices[all_tickers],
+                    volumes=price_data.volumes[all_tickers] if price_data.volumes is not None else None
+                )
+                asset_tickers = selected_tickers  # Only the assets, not the benchmark
+            else:
+                liquid_universe = PriceData(
+                    tickers=selected_tickers,
+                    dates=price_data.dates,
+                    prices=price_data.prices[selected_tickers],
+                    volumes=price_data.volumes[selected_tickers] if price_data.volumes is not None else None
+                )
+                asset_tickers = selected_tickers
             
             # Create and run backtest
             backtest = CVaRIndexBacktest(
                 price_data=liquid_universe,
                 optimization_config=optimization_config,
-                backtest_config=backtest_config
+                asset_tickers=asset_tickers
             )
             
-            results = backtest.run()
+            results = backtest.run_backtest(backtest_config)
             
             # Calculate metrics
-            total_return = (results['index_values'][-1] / 100.0) - 1.0
-            annual_return = annualize_return(total_return, len(results['returns']), 252)
-            sharpe_ratio = calculate_sharpe_ratio(results['returns'], 0.0, 252)
-            max_dd = calculate_max_drawdown(results['returns'])
+            total_return = (results.index_values.iloc[-1] / 100.0) - 1.0
+            annual_return = annualize_return(total_return, len(results.returns), 252)
+            sharpe_ratio = calculate_sharpe_ratio(results.returns, 0.0, 252)
+            max_dd = calculate_max_drawdown(results.returns)
             
             # Save results
             results_df = pd.DataFrame({
-                'Date': results['dates'],
-                'Index_Value': results['index_values']
+                'Date': results.index_values.index,
+                'Index_Value': results.index_values.values
             })
             results_df.to_csv('results/cleir_index_gui.csv', index=False)
             
@@ -258,7 +337,7 @@ class OptimizationController:
                 'annual_return': annual_return,
                 'sharpe_ratio': sharpe_ratio,
                 'max_drawdown': max_dd,
-                'final_value': results['index_values'][-1],
+                'final_value': results.index_values.iloc[-1],
                 'total_return': total_return
             }
             

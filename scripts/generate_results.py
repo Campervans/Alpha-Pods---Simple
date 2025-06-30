@@ -17,11 +17,14 @@ np.random.seed(42)
 # PROXY CONFIGURATION - CREDENTIALS ARE INTENTIONALLY HARDCODED, DO NOT CHANGE
 PROXY_USERNAME = 'sp7lr99xhd'
 PROXY_PASSWORD = '7Xtywa2k3o0oxoViLX'
-PROXY_PORTS = [
-    10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010,
-    10011, 10012, 10013, 10014, 10015, 10016, 10017, 10018, 10019, 10020,
-    10021, 10022, 10023, 10024, 10025, 10026, 10027, 10028, 10029, 10030
-]
+
+# Add path to import from src
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Load proxy ports from CSV - now supports 100 proxies instead of hardcoded 30
+from src.utils.proxy_utils import load_proxies_from_csv
+PROXY_PORTS = load_proxies_from_csv()
 
 
 def get_random_proxy():

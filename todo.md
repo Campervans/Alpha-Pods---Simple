@@ -108,36 +108,22 @@
   # Should not raise FutureWarning
   ```
 
-## 🟢 Issue 3: CLEIR Error - download_benchmark_data() unexpected keyword
+## 🟢 Issue 3: CLEIR Error - CVaRIndexBacktest constructor issues ✅ COMPLETE
 
-### Step 1: Fix the Function Call
-- [ ] Open `src/gui/controllers.py`
-- [ ] Find `download_benchmark_data` call (around line 212)
-- [ ] Locate this code:
-  ```python
-  benchmark_data = download_benchmark_data(
-      [optimization_config.benchmark_ticker],
-      backtest_config.start_date,
-      backtest_config.end_date,
-      cache_dir="data/raw"  # THIS LINE
-  )
-  ```
-- [ ] Remove the `cache_dir="data/raw"` line
-- [ ] Save the file
+### Fixed Issues:
+- [x] Fixed `download_benchmark_data()` unexpected keyword argument
+- [x] Fixed CVaRIndexBacktest constructor - removed invalid `backtest_config` parameter  
+- [x] Fixed method calls - changed `backtest.run()` to `backtest.run_backtest(backtest_config)`
+- [x] Fixed result access - updated from dictionary to attribute style
+- [x] Added proper CLEIR support with `asset_tickers` parameter
+- [x] Fixed `select_liquid_universe()` parameter mismatch (PriceData vs List[str])
 
-### Step 2: Verify Fix Works
-- [ ] Test CLEIR from GUI (if possible)
-- [ ] Or create quick test:
-  ```python
-  from src.market_data.downloader import download_benchmark_data
-  data = download_benchmark_data(['SPY'], '2024-01-01', '2024-12-31')
-  print(f"Downloaded SPY: {len(data['SPY'])} days")
-  ```
-
-### Step 3: Add Caching to Benchmark Downloads (Optional Enhancement)
-- [ ] Consider updating `download_benchmark_data` to use cache
-- [ ] Could reuse `download_single_ticker` which already has caching
-- [ ] Or add cache_dir parameter to function signature
+### Changes Made:
+1. ✅ Removed `cache_dir="data/raw"` from `download_benchmark_data` call
+2. ✅ Fixed CVaRIndexBacktest constructor calls in both optimization methods
+3. ✅ Updated result handling to use BacktestResults object properly
+4. ✅ Enhanced CLEIR optimization to properly handle benchmark integration
+5. ✅ Fixed PriceData object len() error by correcting function signatures
 
 ## 🔵 Issue 4: Performance and Rate Limiting
 
@@ -242,15 +228,20 @@ python3 -W error::FutureWarning -c "from src.market_data.downloader import downl
 
 - [x] Issue 1: Download Errors (4/6 steps) - Added error logging, debug prints, improved MultiIndex handling
 - [x] Issue 2: FutureWarning (3/3 steps) ✅ COMPLETE
-- [x] Issue 3: CLEIR Error (3/3 steps) ✅ COMPLETE
+- [x] Issue 3: CLEIR Error (6/6 steps) ✅ COMPLETE
 - [ ] Issue 4: Performance (0/5 steps)
 - [ ] Testing & Validation (0/5 steps)
 
-**Total Progress: 10/22 steps completed**
+**Total Progress: 13/22 steps completed**
 
 ## Completed Fixes:
 1. ✅ Fixed CLEIR error - removed cache_dir parameter
 2. ✅ Fixed FutureWarning - changed fillna to ffill()
 3. ✅ Added enhanced error logging for downloads
 4. ✅ Improved MultiIndex handling for yfinance data
-5. ✅ Created debug script that confirms downloads work 
+5. ✅ Created debug script that confirms downloads work
+6. ✅ Fixed CVaRIndexBacktest constructor - removed invalid backtest_config parameter
+7. ✅ Fixed method calls - changed backtest.run() to backtest.run_backtest()
+8. ✅ Fixed result access - updated from dictionary to attribute style
+9. ✅ Fixed select_liquid_universe parameter mismatch - PriceData vs List[str]
+10. ✅ Enhanced CLEIR with proper asset_tickers parameter for benchmark separation 
