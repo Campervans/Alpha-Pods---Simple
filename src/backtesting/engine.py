@@ -10,8 +10,7 @@ from ..optimization.cvar_solver import solve_cvar
 from .rebalancer import (
     calculate_drift_adjusted_weights, 
     create_rebalance_event,
-    get_rebalancing_dates,
-    apply_transaction_costs_to_returns
+    get_rebalancing_dates
 )
 
 
@@ -109,13 +108,11 @@ class CVaRIndexBacktest:
             
             self.rebalance_events.append(rebalance_event)
             
-            # apply costs
-            if len(index_values) > 1:
-                current_return = (index_values[-1] / index_values[-2]) - 1
-                net_return = apply_transaction_costs_to_returns(
-                    current_return, rebalance_event.transaction_cost
-                )
-                index_values[-1] = index_values[-2] * (1 + net_return)
+            # Apply transaction costs directly to portfolio value
+            # Cost formula: IndexValue_post = IndexValue_pre * (1 - transaction_cost)
+            # Where transaction_cost = turnover * 10bps (0.001)
+            if len(index_values) > 0:
+                index_values[-1] *= (1 - rebalance_event.transaction_cost)
             
             # update weights
             current_weights = new_weights.copy()
