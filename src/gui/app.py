@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 from typing import Optional
+import os
+import pandas as pd
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -11,7 +13,7 @@ from src.gui.components import (
     console, create_header, create_menu, show_error, 
     show_success, show_info, create_data_table,
     confirm_action, get_text_input, clear_screen,
-    create_progress_spinner
+    create_progress_spinner, create_file_tree, create_interactive_file_tree
 )
 from src.gui.controllers import DataController, OptimizationController, ResultsController
 from rich.panel import Panel
@@ -43,11 +45,10 @@ class CVaRGUI:
         ))
         
         options = [
+            "TASK A - Run CLEIR Optimization",
+            "TASK A - Run CVaR Optimization",
+            "TASK A - View Results",
             "Data Management",
-            "Run CVaR Optimization", 
-            "Run CLEIR Optimization",
-            "View Results",
-            "Generate Deliverables",
             "About",
             "Exit"
         ]
@@ -55,18 +56,16 @@ class CVaRGUI:
         choice = create_menu("Main Menu", options)
         
         if choice == "1":
-            self.data_management_menu()
+            self.run_cleir_optimization()
         elif choice == "2":
             self.run_cvar_optimization()
         elif choice == "3":
-            self.run_cleir_optimization()
-        elif choice == "4":
             self.view_results()
+        elif choice == "4":
+            self.data_management_menu()
         elif choice == "5":
-            self.generate_deliverables()
-        elif choice == "6":
             self.show_about()
-        elif choice == "7":
+        elif choice == "6":
             self.running = False
             show_info("Goodbye!")
     
@@ -160,37 +159,16 @@ class CVaRGUI:
                 console.print(create_data_table("Results", {
                     'Annual Return': f"{result['annual_return']:.2%}",
                     'Sharpe Ratio': f"{result['sharpe_ratio']:.3f}",
-                    'Max Drawdown': f"{result['max_drawdown']:.2%}"
+                    'Max Drawdown': f"{result['max_drawdown']:.2%}",
+                    'Final Index Value': f"{result.get('final_value', 0):.2f}",
+                    'Total Return': f"{result.get('total_return', 0):.2%}"
                 }))
             else:
                 show_error(f"Optimization failed: {result['error']}")
         
         console.input("\nPress Enter to continue...")
     
-    def generate_deliverables(self):
-        """Generate all Task A deliverables."""
-        clear_screen()
-        console.print(create_header("Generate Deliverables"))
-        
-        # Check status
-        status = self.results_controller.generate_deliverables()
-        
-        table = Table(title="Deliverables Status", show_header=True)
-        table.add_column("Deliverable", style="cyan")
-        table.add_column("Status", style="green")
-        
-        table.add_row("Daily Index Values CSV", "✓" if status['daily_values'] else "✗")
-        table.add_row("Performance Metrics Table", "✓" if status['metrics_table'] else "✗")
-        table.add_row("Comparison Plot", "✓" if status['comparison_plot'] else "✗")
-        
-        console.print(table)
-        
-        if all(status.values()):
-            show_success("All deliverables are ready!")
-        else:
-            show_info("Some deliverables are missing. Run optimization first.")
-        
-        console.input("\nPress Enter to continue...")
+
     
     def show_about(self):
         """Show about screen."""
@@ -201,6 +179,16 @@ class CVaRGUI:
         about_text.append("CVaR/CLEIR Portfolio Optimization System\n\n", style="bold")
         about_text.append("This system implements CVaR-based portfolio optimization\n")
         about_text.append("with optional CLEIR (CVaR-LASSO Enhanced Index Replication).\n\n")
+        
+        about_text.append("Created by: ", style="dim")
+        about_text.append("James Campion\n", style="bold cyan")
+        about_text.append("eToro: ", style="dim")
+        about_text.append("etoro.com/campervans\n", style="cyan underline")
+        about_text.append("Email: ", style="dim")
+        about_text.append("james@oureasystems.com\n", style="cyan")
+        about_text.append("Phone: ", style="dim")
+        about_text.append("+971561621929\n\n", style="cyan")
+        
         about_text.append("GitHub: ", style="dim")
         about_text.append("https://github.com/Campervans/Alpha-Pods---Simple\n", style="cyan underline")
         about_text.append("\nTask Requirements:\n", style="bold")
@@ -213,14 +201,67 @@ class CVaRGUI:
         console.input("\nPress Enter to continue...")
     
     def view_results(self):
-        """View optimization results."""
+        """View optimization results with submenu."""
+        while True:
+            clear_screen()
+            console.print(create_header("View Results & Deliverables"))
+            
+            # Show deliverables status
+            status = self.results_controller.generate_deliverables()
+            
+            status_table = Table(title="Deliverables Status", show_header=True)
+            status_table.add_column("Deliverable", style="cyan")
+            status_table.add_column("Status", style="green")
+            status_table.add_column("File", style="dim")
+            
+            status_table.add_row(
+                "Daily Index Values", 
+                "✓" if status['daily_values'] else "✗",
+                "daily_index_values.csv"
+            )
+            status_table.add_row(
+                "Performance Metrics", 
+                "✓" if status['metrics_table'] else "✗",
+                "performance_summary.csv"
+            )
+            status_table.add_row(
+                "Comparison Plot", 
+                "✓" if status['comparison_plot'] else "✗",
+                "index_performance_analysis.png"
+            )
+            
+            console.print(status_table)
+            console.print()
+            
+            options = [
+                "View Performance Summary",
+                "View Daily Index Values",
+                "Browse Files (Interactive)",
+                "Generate Missing Deliverables",
+                "Back to Main Menu"
+            ]
+            
+            choice = create_menu("Results Options", options)
+            
+            if choice == "1":
+                self.view_performance_summary()
+            elif choice == "2":
+                self.view_daily_index_values()
+            elif choice == "3":
+                self.view_results_file_tree()
+            elif choice == "4":
+                self.generate_missing_deliverables()
+            elif choice == "5":
+                return
+    
+    def view_performance_summary(self):
+        """View performance summary table."""
         clear_screen()
-        console.print(create_header("View Results"))
+        console.print(create_header("Performance Summary"))
         
-        # Load performance summary
         df = self.results_controller.load_performance_summary()
         if df is not None:
-            table = Table(title="Performance Summary", show_header=True)
+            table = Table(title="Performance Metrics", show_header=True)
             
             # Add columns
             for col in df.columns:
@@ -232,7 +273,210 @@ class CVaRGUI:
             
             console.print(table)
         else:
-            show_info("No results found. Run optimization first.")
+            show_info("No performance summary found. Run optimization first.")
+        
+        console.input("\nPress Enter to continue...")
+    
+    def view_daily_index_values(self):
+        """View daily index values."""
+        clear_screen()
+        console.print(create_header("Daily Index Values"))
+        
+        path = os.path.join(self.results_controller.results_dir, 'daily_index_values.csv')
+        if os.path.exists(path):
+            try:
+                df = pd.read_csv(path)
+                
+                # Show first and last 10 rows
+                table = Table(title="Daily Index Values (First 10 and Last 10 rows)", show_header=True)
+                
+                # Add columns
+                for col in df.columns:
+                    table.add_column(col)
+                
+                # Add first 10 rows
+                for _, row in df.head(10).iterrows():
+                    table.add_row(*[str(val) for val in row.values])
+                
+                # Add separator
+                if len(df) > 20:
+                    table.add_row(*["..." for _ in df.columns])
+                
+                # Add last 10 rows
+                if len(df) > 10:
+                    for _, row in df.tail(10).iterrows():
+                        table.add_row(*[str(val) for val in row.values])
+                
+                console.print(table)
+                show_info(f"Total rows: {len(df)}")
+            except Exception as e:
+                show_error(f"Error reading file: {str(e)}")
+        else:
+            show_info("Daily index values file not found. Run optimization first.")
+        
+        console.input("\nPress Enter to continue...")
+    
+    def view_results_file_tree(self):
+        """View results directory file tree with interactive file viewing."""
+        while True:
+            clear_screen()
+            console.print(create_header("Results File Browser"))
+            
+            if os.path.exists(self.results_controller.results_dir):
+                selected_file = create_interactive_file_tree(self.results_controller.results_dir, "Results")
+                
+                if selected_file is None:
+                    # User chose to go back
+                    return
+                
+                # View the selected file
+                self.view_file(selected_file)
+            else:
+                show_info("Results directory not found.")
+                console.input("\nPress Enter to continue...")
+                return
+    
+    def view_file(self, file_path: str):
+        """View a file based on its type."""
+        clear_screen()
+        path = Path(file_path)
+        console.print(create_header(f"Viewing: {path.name}"))
+        
+        try:
+            if path.suffix == '.csv':
+                # View CSV file
+                df = pd.read_csv(file_path)
+                
+                # Show info about the file
+                show_info(f"Shape: {df.shape[0]} rows × {df.shape[1]} columns")
+                
+                # Create table for first/last rows
+                table = Table(title="Data Preview (First 10 and Last 10 rows)", show_header=True)
+                
+                # Add columns
+                for col in df.columns:
+                    table.add_column(col, style="cyan" if col == df.columns[0] else "white")
+                
+                # Add first 10 rows
+                for _, row in df.head(10).iterrows():
+                    table.add_row(*[str(val) for val in row.values])
+                
+                # Add separator if needed
+                if len(df) > 20:
+                    table.add_row(*["..." for _ in df.columns])
+                
+                # Add last 10 rows if different from first
+                if len(df) > 10:
+                    for _, row in df.tail(10).iterrows():
+                        table.add_row(*[str(val) for val in row.values])
+                
+                console.print(table)
+                
+                # Show column info
+                console.print("\n[bold]Column Information:[/bold]")
+                col_table = Table(show_header=True)
+                col_table.add_column("Column", style="cyan")
+                col_table.add_column("Type", style="yellow")
+                col_table.add_column("Non-Null Count", style="green")
+                
+                for col in df.columns:
+                    col_table.add_row(
+                        col,
+                        str(df[col].dtype),
+                        str(df[col].count())
+                    )
+                
+                console.print(col_table)
+                
+            elif path.suffix == '.png':
+                # For PNG files, show file info
+                size = path.stat().st_size / (1024 * 1024)
+                show_info(f"Image file: {path.name}")
+                show_info(f"Size: {size:.2f} MB")
+                show_info("Note: Cannot display images in terminal. Please open the file directly to view.")
+                
+            elif path.suffix in ['.txt', '.md']:
+                # View text files
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                
+                # Create a panel with the content
+                from rich.panel import Panel
+                from rich.syntax import Syntax
+                
+                if path.suffix == '.md':
+                    # Use markdown syntax highlighting
+                    syntax = Syntax(content, "markdown", theme="monokai", line_numbers=True)
+                else:
+                    syntax = Syntax(content, "text", theme="monokai", line_numbers=True)
+                
+                console.print(Panel(syntax, title=path.name, border_style="blue"))
+                
+            else:
+                show_info(f"File type '{path.suffix}' cannot be displayed in terminal.")
+                
+        except Exception as e:
+            show_error(f"Error reading file: {str(e)}")
+        
+        console.input("\nPress Enter to continue...")
+    
+    def generate_missing_deliverables(self):
+        """Generate missing deliverables."""
+        clear_screen()
+        console.print(create_header("Generate Missing Deliverables"))
+        
+        # Check what's missing
+        status = self.results_controller.generate_deliverables()
+        missing = [k for k, v in status.items() if not v]
+        
+        if not missing:
+            show_success("All deliverables are already generated!")
+        else:
+            show_info(f"Missing deliverables: {', '.join(missing)}")
+            
+            if confirm_action("Generate missing deliverables?"):
+                # Check if we have the necessary optimization results
+                gui_results = ['cvar_index_gui.csv', 'cleir_index_gui.csv']
+                existing_results = []
+                
+                for result_file in gui_results:
+                    if os.path.exists(os.path.join(self.results_controller.results_dir, result_file)):
+                        existing_results.append(result_file)
+                
+                if not existing_results:
+                    show_error("No optimization results found. Please run CVaR or CLEIR optimization first.")
+                else:
+                    show_info(f"Found results from: {', '.join(existing_results)}")
+                    
+                    # Run the generate_final_results script
+                    with create_progress_spinner("Generating deliverables...") as progress:
+                        task = progress.add_task("Processing...", total=None)
+                        
+                        try:
+                            # Import and run the generation script
+                            sys.path.append(str(Path(__file__).parent.parent.parent / 'scripts'))
+                            from generate_final_results import main as generate_results
+                            
+                            # Temporarily redirect stdout to capture output
+                            import io
+                            from contextlib import redirect_stdout
+                            
+                            f = io.StringIO()
+                            with redirect_stdout(f):
+                                generate_results()
+                            
+                            progress.remove_task(task)
+                            show_success("Deliverables generated successfully!")
+                            
+                            # Show what was generated
+                            new_status = self.results_controller.generate_deliverables()
+                            newly_generated = [k for k, v in new_status.items() if v and k in missing]
+                            if newly_generated:
+                                show_info(f"Generated: {', '.join(newly_generated)}")
+                        
+                        except Exception as e:
+                            progress.remove_task(task)
+                            show_error(f"Error generating deliverables: {str(e)}")
         
         console.input("\nPress Enter to continue...")
     
@@ -325,7 +569,9 @@ class CVaRGUI:
                 console.print(create_data_table("Results", {
                     'Annual Return': f"{result['annual_return']:.2%}",
                     'Sharpe Ratio': f"{result['sharpe_ratio']:.3f}",
-                    'Max Drawdown': f"{result['max_drawdown']:.2%}"
+                    'Max Drawdown': f"{result['max_drawdown']:.2%}",
+                    'Final Index Value': f"{result.get('final_value', 0):.2f}",
+                    'Total Return': f"{result.get('total_return', 0):.2%}"
                 }))
             else:
                 show_error(f"Optimization failed: {result['error']}")
