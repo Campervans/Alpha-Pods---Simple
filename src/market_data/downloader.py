@@ -88,13 +88,30 @@ def download_single_ticker(ticker: str, start: str, end: str,
                     time.sleep(delay * (attempt + 1))  # Exponential backoff
                     
                 # Let yfinance handle the session internally
-                df = yf.download(
-                    ticker, 
-                    start=start, 
-                    end=end, 
-                    auto_adjust=True,
-                    progress=False
-                )
+                try:
+                    df = yf.download(
+                        ticker, 
+                        start=start, 
+                        end=end, 
+                        auto_adjust=True,
+                        progress=False
+                    )
+                except Exception as e:
+                    import traceback
+                    print(f"\n{'='*60}")
+                    print(f"ERROR downloading {ticker}")
+                    print(f"Error type: {type(e).__name__}")
+                    print(f"Error message: {e}")
+                    print(f"Full traceback:")
+                    traceback.print_exc()
+                    print(f"{'='*60}\n")
+                    raise
+                
+                # Debug print to see what we got
+                if hasattr(df, 'shape'):
+                    print(f"Downloaded {ticker}: shape={df.shape}, empty={df.empty}")
+                    if hasattr(df, 'columns'):
+                        print(f"Columns type: {type(df.columns)}, values: {list(df.columns)[:5] if len(df.columns) > 0 else 'empty'}")
                 
                 if df.empty:
                     if attempt < retry_count - 1:
@@ -105,8 +122,17 @@ def download_single_ticker(ticker: str, start: str, end: str,
                 
                 # Handle multi-level columns (when ticker is in column names)
                 if isinstance(df.columns, pd.MultiIndex):
-                    # Extract just the price/volume data, dropping the ticker level
-                    df.columns = df.columns.droplevel(1)
+                    print(f"{ticker} has MultiIndex columns: levels={df.columns.levels}")
+                    # More robust handling
+                    if len(df.columns.levels) > 1 and ticker in df.columns.get_level_values(1):
+                        # If ticker is in the second level, select it
+                        df = df.xs(ticker, level=1, axis=1)
+                    elif len(set(df.columns.get_level_values(1))) == 1:
+                        # If only one ticker in second level, just drop it
+                        df.columns = df.columns.droplevel(1)
+                    else:
+                        # Try to extract just the price/volume data
+                        df.columns = df.columns.droplevel(1)
                 
                 # get close & volume
                 required_cols = ['Close', 'Volume']
