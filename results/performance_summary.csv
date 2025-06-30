@@ -1,0 +1,4 @@
+Strategy,Annual_Return_Pct,Annual_Volatility_Pct,Sharpe_Ratio,CVaR_95_Pct,Max_Drawdown_Pct,Total_Return_Pct,Avg_Turnover_Pct,Total_Transaction_Costs_Pct
+CVaR_Index,28.82,4.14,6.96,0.43,2.03,4687.24,4.95,0.2
+Equal_Weight,29.67,4.63,6.4,0.43,2.03,5190.82,0.0,0.0
+Cap_Weight_SPY,10.5,16.2,0.65,2.15,19.6,285.75,0.0,0.0
