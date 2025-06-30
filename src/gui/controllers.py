@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import pandas as pd
+from rich.console import Console
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -22,6 +23,7 @@ from src.utils.schemas import UniverseConfig, OptimizationConfig, BacktestConfig
 from src.optimization.cvar_solver import solve_cvar
 from src.optimization.cleir_solver import solve_cleir
 
+console = Console()
 
 class DataController:
     """Handle data management operations."""
@@ -37,8 +39,8 @@ class DataController:
         
         tickers = set()
         for filename in os.listdir(self.cache_dir):
-            if filename.endswith('.csv'):
-                ticker = filename.split('_')[0]
+            if filename.endswith('.pkl') and not filename.endswith('_meta.pkl'):
+                ticker = filename.replace('.pkl', '')
                 tickers.add(ticker)
         
         return sorted(list(tickers))
@@ -176,10 +178,11 @@ class OptimizationController:
             sharpe_ratio = calculate_sharpe_ratio(results.returns, 0.0, 252)
             max_dd = calculate_max_drawdown(results.returns)
             
-            # Save results
+            # Save results with proper precision
+            from ..utils.precision import round_index_values
             results_df = pd.DataFrame({
                 'Date': results.index_values.index,
-                'Index_Value': results.index_values.values
+                'Index_Value': round_index_values(results.index_values.values)
             })
             results_df.to_csv('results/cvar_index_gui.csv', index=False)
             
@@ -325,12 +328,20 @@ class OptimizationController:
             sharpe_ratio = calculate_sharpe_ratio(results.returns, 0.0, 252)
             max_dd = calculate_max_drawdown(results.returns)
             
-            # Save results
+            # Save results with proper precision
+            from ..utils.precision import round_index_values
             results_df = pd.DataFrame({
                 'Date': results.index_values.index,
-                'Index_Value': results.index_values.values
+                'Index_Value': round_index_values(results.index_values.values)
             })
             results_df.to_csv('results/cleir_index_gui.csv', index=False)
+            
+            # Create visualization with SPY comparison
+            from ..gui.visualization import plot_index_comparison
+            comparison_stats = plot_index_comparison(
+                'results/cleir_index_gui.csv',
+                optimization_config.benchmark_ticker or 'SPY'
+            )
             
             return {
                 'success': True,
@@ -338,7 +349,8 @@ class OptimizationController:
                 'sharpe_ratio': sharpe_ratio,
                 'max_drawdown': max_dd,
                 'final_value': results.index_values.iloc[-1],
-                'total_return': total_return
+                'total_return': total_return,
+                'comparison_stats': comparison_stats
             }
             
         except Exception as e:

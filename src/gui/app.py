@@ -511,19 +511,53 @@ class CVaRGUI:
         
         cached = self.data_controller.get_cached_tickers()
         if cached:
-            table = Table(title=f"Cached Tickers ({len(cached)} total)", show_header=False)
-            table.add_column("Ticker", style="cyan")
+            # Create a more detailed table
+            table = Table(title=f"Cached Tickers ({len(cached)} total)", show_header=True)
+            table.add_column("Ticker", style="cyan", width=10)
+            table.add_column("File Size", style="yellow", width=12)
+            table.add_column("Last Modified", style="green", width=20)
             
-            # Show in columns
-            for ticker in cached[:50]:  # Limit display
-                table.add_row(ticker)
+            # Get file details
+            import os
+            from datetime import datetime
+            
+            # Show first 50 tickers with details
+            for ticker in cached[:50]:
+                file_path = os.path.join(self.data_controller.cache_dir, f"{ticker}.pkl")
+                if os.path.exists(file_path):
+                    file_stat = os.stat(file_path)
+                    file_size = file_stat.st_size / 1024  # Convert to KB
+                    mod_time = datetime.fromtimestamp(file_stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    table.add_row(ticker, f"{file_size:.1f} KB", mod_time)
+                else:
+                    table.add_row(ticker, "N/A", "N/A")
             
             if len(cached) > 50:
-                table.add_row("...")
+                table.add_row("...", "...", "...")
+                table.add_row(f"({len(cached) - 50} more)", "", "")
             
             console.print(table)
+            
+            # Show summary statistics
+            console.print("\n[bold]Summary:[/bold]")
+            show_info(f"Total cached tickers: {len(cached)}")
+            show_info(f"Cache directory: {os.path.abspath(self.data_controller.cache_dir)}")
+            
+            # Calculate total cache size
+            total_size = 0
+            for ticker in cached:
+                file_path = os.path.join(self.data_controller.cache_dir, f"{ticker}.pkl")
+                if os.path.exists(file_path):
+                    total_size += os.path.getsize(file_path)
+                # Also count meta files
+                meta_path = os.path.join(self.data_controller.cache_dir, f"{ticker}_meta.pkl")
+                if os.path.exists(meta_path):
+                    total_size += os.path.getsize(meta_path)
+            
+            show_info(f"Total cache size: {total_size / (1024 * 1024):.1f} MB")
         else:
             show_info("No cached data found")
+            show_info(f"Cache directory: {os.path.abspath(self.data_controller.cache_dir)}")
         
         console.input("\nPress Enter to continue...")
     

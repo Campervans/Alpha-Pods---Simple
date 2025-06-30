@@ -12,8 +12,12 @@ import numpy as np
 from typing import Tuple, Dict, Any, Optional
 import time
 import warnings
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.console import Console
 
 from ..utils.schemas import OptimizationConfig
+
+console = Console()
 
 
 def create_cleir_problem(
@@ -114,9 +118,20 @@ def solve_cleir(
         raise ValueError("CLEIR requires sparsity_bound to be set")
     
     # Create the optimization problem
-    problem, w_var, zeta_var, z_var, u_var = create_cleir_problem(
-        asset_returns, benchmark_returns, config
-    )
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+        disable=not verbose
+    ) as progress:
+        setup_task = progress.add_task("[cyan]Setting up CLEIR problem...", total=1)
+        problem, w_var, zeta_var, z_var, u_var = create_cleir_problem(
+            asset_returns, benchmark_returns, config
+        )
+        progress.update(setup_task, completed=1)
     
     # Solver info tracking
     solver_info = {
@@ -138,119 +153,130 @@ def solve_cleir(
     
     start_time = time.time()
     
-    for solver_name in solvers_to_try:
-        try:
-            if verbose:
-                print(f"Trying {solver_name} solver...")
-            
-            # Solver-specific options
-            solver_options = config.solver_options.copy()
-            
-            if solver_name == 'ECOS_BB':
-                # ECOS_BB is good for mixed-integer problems
-                solver_options.setdefault('mi_max_iters', 1000)
-                solver_options.setdefault('mi_abs_eps', 1e-6)
-                solver_options.setdefault('mi_rel_eps', 1e-4)
-            elif solver_name == 'ECOS':
-                solver_options.setdefault('max_iters', 200)
-                solver_options.setdefault('abstol', 1e-7)
-                solver_options.setdefault('reltol', 1e-6)
-            elif solver_name == 'SCS':
-                solver_options.setdefault('max_iters', 5000)
-                solver_options.setdefault('eps', 1e-5)
-                solver_options.setdefault('normalize', True)
-            elif solver_name == 'CLARABEL':
-                solver_options.setdefault('max_iter', 200)
-                solver_options.setdefault('tol_feas', 1e-7)
-                solver_options.setdefault('tol_gap_abs', 1e-7)
-            
-            # Solve the problem
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                
-                if hasattr(cp, solver_name):
-                    solver = getattr(cp, solver_name)
-                else:
-                    if verbose:
-                        print(f"Solver {solver_name} not available")
-                    continue
-                
-                problem.solve(
-                    solver=solver,
-                    verbose=verbose,
-                    **solver_options
-                )
-            
-            # Check if solution is valid
-            if problem.status in ['optimal', 'optimal_inaccurate']:
-                optimal_weights = w_var.value
-                
-                if optimal_weights is None:
-                    if verbose:
-                        print(f"{solver_name} returned None weights")
-                    continue
-                
-                # Normalize weights to ensure they sum to 1
-                weight_sum = np.sum(optimal_weights)
-                if abs(weight_sum - 1.0) > 1e-6:
-                    if verbose:
-                        print(f"Normalizing weights (sum was {weight_sum:.6f})")
-                    optimal_weights = optimal_weights / weight_sum
-                
-                # Clean up numerical noise - set very small weights to zero
-                optimal_weights[np.abs(optimal_weights) < 1e-6] = 0.0
-                
-                # Check for negative weights after cleanup
-                if np.any(optimal_weights < 0):
-                    print(f"WARNING: Negative weights detected after optimization!")
-                    print(f"Min weight: {np.min(optimal_weights)}")
-                    print(f"Negative weights at indices: {np.where(optimal_weights < 0)[0]}")
-                    # Force to zero
-                    optimal_weights = np.maximum(optimal_weights, 0.0)
-                    # Renormalize
-                    optimal_weights = optimal_weights / np.sum(optimal_weights)
-                
-                # Calculate sparsity metrics
-                sparsity_threshold = 1e-6
-                n_nonzero = np.sum(np.abs(optimal_weights) > sparsity_threshold)
-                l1_norm = np.sum(np.abs(optimal_weights))
-                
-                # Update solver info
-                solver_info.update({
-                    'status': problem.status,
-                    'solver_used': solver_name,
-                    'solve_time': time.time() - start_time,
-                    'objective_value': problem.value,
-                    'n_iterations': problem.solver_stats.num_iters if hasattr(problem.solver_stats, 'num_iters') else 0,
-                    'solver_stats': problem.solver_stats.__dict__ if hasattr(problem.solver_stats, '__dict__') else {},
-                    'sparsity': n_nonzero,
-                    'l1_norm': l1_norm,
-                })
-                
-                if verbose:
-                    print(f"✓ {solver_name} succeeded!")
-                    print(f"  Objective: {problem.value:.6f}")
-                    print(f"  Sparsity: {n_nonzero}/{asset_returns.shape[1]} assets")
-                    print(f"  L1 norm: {l1_norm:.4f} (bound: {config.sparsity_bound})")
-                
-                return optimal_weights, solver_info
-            
-            else:
-                if verbose:
-                    print(f"{solver_name} failed with status: {problem.status}")
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+        disable=not verbose
+    ) as progress:
+        solver_task = progress.add_task(
+            f"[yellow]Trying {len(solvers_to_try)} solvers...", 
+            total=len(solvers_to_try)
+        )
         
-        except Exception as e:
-            if verbose:
-                print(f"{solver_name} error: {str(e)}")
-            continue
+        for i, solver_name in enumerate(solvers_to_try):
+            try:
+                progress.update(
+                    solver_task, 
+                    description=f"[yellow]Trying {solver_name} solver..."
+                )
+                
+                # Solver-specific options
+                solver_options = config.solver_options.copy()
+                
+                if solver_name == 'ECOS_BB':
+                    # ECOS_BB is good for mixed-integer problems
+                    solver_options.setdefault('mi_max_iters', 1000)
+                    solver_options.setdefault('mi_abs_eps', 1e-6)
+                    solver_options.setdefault('mi_rel_eps', 1e-4)
+                elif solver_name == 'ECOS':
+                    solver_options.setdefault('max_iters', 200)
+                    solver_options.setdefault('abstol', 1e-7)
+                    solver_options.setdefault('reltol', 1e-6)
+                elif solver_name == 'SCS':
+                    solver_options.setdefault('max_iters', 5000)
+                    solver_options.setdefault('eps', 1e-5)
+                    solver_options.setdefault('normalize', True)
+                elif solver_name == 'CLARABEL':
+                    solver_options.setdefault('max_iter', 200)
+                    solver_options.setdefault('tol_feas', 1e-7)
+                    solver_options.setdefault('tol_gap_abs', 1e-7)
+                
+                # Solve the problem
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    
+                    if hasattr(cp, solver_name):
+                        solver = getattr(cp, solver_name)
+                    else:
+                        progress.update(solver_task, advance=1)
+                        continue
+                    
+                    problem.solve(
+                        solver=solver,
+                        verbose=False,  # Suppress solver output when using rich
+                        **solver_options
+                    )
+                
+                # Check if solution is valid
+                if problem.status in ['optimal', 'optimal_inaccurate']:
+                    optimal_weights = w_var.value
+                    
+                    if optimal_weights is None:
+                        progress.update(solver_task, advance=1)
+                        continue
+                    
+                    # Apply precision management to weights
+                    from ..utils.precision import normalize_weights
+                    optimal_weights = normalize_weights(optimal_weights)
+                    
+                    # Check for negative weights after normalization
+                    if np.any(optimal_weights < 0):
+                        console.print(f"[orange]WARNING: Negative weights detected after optimization![/orange]")
+                        console.print(f"Min weight: {np.min(optimal_weights)}")
+                        console.print(f"Negative weights at indices: {np.where(optimal_weights < 0)[0]}")
+                        # Force to zero and renormalize
+                        optimal_weights = np.maximum(optimal_weights, 0.0)
+                        optimal_weights = normalize_weights(optimal_weights)
+                    
+                    # Calculate sparsity metrics
+                    sparsity_threshold = 1e-6
+                    n_nonzero = np.sum(np.abs(optimal_weights) > sparsity_threshold)
+                    l1_norm = np.sum(np.abs(optimal_weights))
+                    
+                    # Update solver info
+                    solver_info.update({
+                        'status': problem.status,
+                        'solver_used': solver_name,
+                        'solve_time': time.time() - start_time,
+                        'objective_value': problem.value,
+                        'n_iterations': problem.solver_stats.num_iters if hasattr(problem.solver_stats, 'num_iters') else 0,
+                        'solver_stats': problem.solver_stats.__dict__ if hasattr(problem.solver_stats, '__dict__') else {},
+                        'sparsity': n_nonzero,
+                        'l1_norm': l1_norm,
+                    })
+                    
+                    progress.update(solver_task, completed=len(solvers_to_try))
+                    
+                    if verbose:
+                        console.print(f"[green]✓ {solver_name} succeeded![/green]")
+                        console.print(f"  Objective: {problem.value:.6f}")
+                        console.print(f"  Sparsity: {n_nonzero}/{asset_returns.shape[1]} assets")
+                        console.print(f"  L1 norm: {l1_norm:.4f} (bound: {config.sparsity_bound})")
+                    
+                    return optimal_weights, solver_info
+                
+                else:
+                    progress.update(solver_task, advance=1)
+            
+            except Exception as e:
+                progress.update(solver_task, advance=1)
+                continue
     
     # All solvers failed
     solver_info['status'] = 'FAILED'
     solver_info['solve_time'] = time.time() - start_time
     
+    if verbose:
+        console.print("[red]All solvers failed! Using equal weights as fallback.[/red]")
+    
     # Return equal weights as fallback
+    from ..utils.precision import normalize_weights
     n_assets = asset_returns.shape[1]
-    equal_weights = np.ones(n_assets) / n_assets
+    equal_weights = normalize_weights(np.ones(n_assets) / n_assets)
     
     return equal_weights, solver_info
 
