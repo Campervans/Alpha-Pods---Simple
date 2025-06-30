@@ -168,7 +168,7 @@ class UniverseConfig:
 @dataclass
 class OptimizationConfig:
     """
-    Configuration for CVaR optimization.
+    Configuration for CVaR optimization and CLEIR.
     
     Parameters that control the portfolio optimization process.
     """
@@ -178,6 +178,9 @@ class OptimizationConfig:
     min_weight: float = 0.0  # Minimum weight per asset
     solver: str = "ECOS"  # CVXPY solver
     solver_options: Dict[str, Any] = field(default_factory=dict)
+    # CLEIR-specific parameters
+    sparsity_bound: Optional[float] = None  # L1 norm constraint (sum of |w_i|)
+    benchmark_ticker: Optional[str] = None  # Benchmark to track (e.g., "SPY")
     
     def __post_init__(self):
         """Validate optimization parameters."""
@@ -190,8 +193,17 @@ class OptimizationConfig:
         if not (0 <= self.min_weight <= self.max_weight <= 1):
             raise ValueError("Weights must satisfy: 0 <= min_weight <= max_weight <= 1")
         
-        if self.solver not in ["ECOS", "SCS", "OSQP", "CLARABEL"]:
-            raise ValueError("Solver must be one of: ECOS, SCS, OSQP, CLARABEL")
+        if self.solver not in ["ECOS", "SCS", "OSQP", "CLARABEL", "ECOS_BB"]:
+            raise ValueError("Solver must be one of: ECOS, SCS, OSQP, CLARABEL, ECOS_BB")
+        
+        # CLEIR validation
+        if self.sparsity_bound is not None:
+            if self.sparsity_bound <= 0:
+                raise ValueError("Sparsity bound must be positive (typically 1.0-2.0)")
+            
+        # If using CLEIR, benchmark is required
+        if self.sparsity_bound is not None and self.benchmark_ticker is None:
+            raise ValueError("CLEIR requires a benchmark ticker to be specified")
 
 
 @dataclass

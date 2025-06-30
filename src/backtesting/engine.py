@@ -18,13 +18,25 @@ from .rebalancer import (
 class CVaRIndexBacktest:
     # runs the backtest simulation
     
-    def __init__(self, price_data: PriceData, optimization_config: OptimizationConfig):
+    def __init__(self, price_data: PriceData, optimization_config: OptimizationConfig, 
+                 asset_tickers: Optional[List[str]] = None):
         self.price_data = price_data
         self.optimization_config = optimization_config
         self.returns = price_data.get_returns(method='simple')
         self.rebalance_events: List[RebalanceEvent] = []
         
-        print(f"Backtester ready: {price_data.n_assets} assets")
+        # For CLEIR: separate assets from benchmark
+        if asset_tickers is not None:
+            self.asset_tickers = asset_tickers
+            self.is_cleir = optimization_config.sparsity_bound is not None
+        else:
+            # Legacy mode: all tickers are assets
+            self.asset_tickers = price_data.tickers
+            self.is_cleir = False
+        
+        print(f"Backtester ready: {len(self.asset_tickers)} assets")
+        if self.is_cleir and optimization_config.benchmark_ticker:
+            print(f"CLEIR mode: tracking {optimization_config.benchmark_ticker}")
         print(f"Period: {price_data.start_date.date()} to {price_data.end_date.date()}")
     
     def run_backtest(self, config: BacktestConfig) -> BacktestResults:
@@ -45,7 +57,8 @@ class CVaRIndexBacktest:
         
         # init portfolio
         index_values = [config.initial_capital]
-        current_weights = np.ones(backtest_data.n_assets) / backtest_data.n_assets  # equal weight start
+        n_assets = len(self.asset_tickers)
+        current_weights = np.ones(n_assets) / n_assets  # equal weight start
         weights_history = []
         
         portfolio_dates = [backtest_data.start_date]
@@ -58,8 +71,9 @@ class CVaRIndexBacktest:
             
             # calc perf since last rebal
             if prev_rebal_date is not None:
+                asset_returns = backtest_returns[self.asset_tickers]
                 period_performance = self._calculate_period_performance(
-                    current_weights, backtest_returns, prev_rebal_date, rebal_date
+                    current_weights, asset_returns, prev_rebal_date, rebal_date
                 )
                 
                 # update index vals
@@ -69,8 +83,9 @@ class CVaRIndexBacktest:
             
             # drift adjusted weights (important for accurate turnover calcs!)
             if prev_rebal_date is not None:
+                asset_returns = backtest_returns[self.asset_tickers]
                 old_weights = calculate_drift_adjusted_weights(
-                    current_weights, backtest_returns, prev_rebal_date, rebal_date
+                    current_weights, asset_returns, prev_rebal_date, rebal_date
                 )
             else:
                 old_weights = current_weights.copy()
@@ -107,7 +122,7 @@ class CVaRIndexBacktest:
             
             # record weights
             weights_record = {'date': rebal_date}
-            for j, ticker in enumerate(backtest_data.tickers):
+            for j, ticker in enumerate(self.asset_tickers):
                 weights_record[ticker] = new_weights[j]
             weights_history.append(weights_record)
             
@@ -115,8 +130,9 @@ class CVaRIndexBacktest:
         
         # final period
         if rebalance_dates[-1] < backtest_data.end_date:
+            asset_returns = backtest_returns[self.asset_tickers]
             final_performance = self._calculate_period_performance(
-                current_weights, backtest_returns, rebalance_dates[-1], backtest_data.end_date
+                current_weights, asset_returns, rebalance_dates[-1], backtest_data.end_date
             )
             period_dates, period_values = final_performance
             index_values.extend(period_values[1:])
@@ -154,18 +170,46 @@ class CVaRIndexBacktest:
     def _optimize_weights(self, returns: pd.DataFrame, 
                          rebal_date: pd.Timestamp) -> tuple[np.ndarray, Dict]:
         # optimize weights for rebal date
-        hist_returns = self._get_optimization_returns(returns, rebal_date)
+        asset_returns = returns[self.asset_tickers]
+        hist_asset_returns = self._get_optimization_returns(asset_returns, rebal_date)
         
-        if len(hist_returns) < 50:
-            print(f"⚠️ Only {len(hist_returns)} obs - using equal weights")
-            n_assets = len(returns.columns)
+        n_assets = len(self.asset_tickers)
+        
+        if len(hist_asset_returns) < 50:
+            print(f"⚠️ Only {len(hist_asset_returns)} obs - using equal weights")
             equal_weights = np.ones(n_assets) / n_assets
             return equal_weights, {'status': 'INSUFFICIENT_DATA'}
         
-        # run cvar opt
+        # Get benchmark returns if in CLEIR mode
+        hist_benchmark_returns = None
+        if self.is_cleir and self.optimization_config.benchmark_ticker:
+            if self.optimization_config.benchmark_ticker in returns.columns:
+                benchmark_returns = returns[self.optimization_config.benchmark_ticker]
+                hist_benchmark_returns = self._get_optimization_returns(
+                    benchmark_returns.to_frame(), rebal_date
+                ).flatten()
+            else:
+                print(f"Warning: Benchmark {self.optimization_config.benchmark_ticker} not found in data")
+        
+        # run optimization
         try:
             start_time = time.time()
-            optimal_weights, solver_info = solve_cvar(hist_returns, self.optimization_config)
+            
+            if self.is_cleir and hist_benchmark_returns is not None:
+                # Import CLEIR solver (to be created)
+                from ..optimization.cleir_solver import solve_cleir
+                optimal_weights, solver_info = solve_cleir(
+                    hist_asset_returns, 
+                    hist_benchmark_returns,
+                    self.optimization_config
+                )
+            else:
+                # Standard CVaR optimization
+                optimal_weights, solver_info = solve_cvar(
+                    hist_asset_returns, 
+                    self.optimization_config
+                )
+            
             solve_time = time.time() - start_time
             solver_info['solve_time'] = solve_time
             
@@ -174,7 +218,6 @@ class CVaRIndexBacktest:
         except Exception as e:
             print(f"Opt failed: {e}")
             # fallback
-            n_assets = len(returns.columns)
             equal_weights = np.ones(n_assets) / n_assets
             return equal_weights, {'status': 'OPTIMIZATION_ERROR', 'error': str(e)}
     

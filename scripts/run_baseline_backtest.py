@@ -49,7 +49,10 @@ def main():
         lookback_days=252,  # 1 year
         max_weight=0.05,    # 5% max per stock
         min_weight=0.0,     # Long-only
-        solver="ECOS"
+        solver="ECOS",
+        # CLEIR parameters
+        sparsity_bound=1.2,  # L1 norm constraint (allows ~80% of assets)
+        benchmark_ticker="SPY"  # Track S&P 500
     )
     
     backtest_config = BacktestConfig(
@@ -119,12 +122,26 @@ def main():
     print("="*50)
     
     try:
+        # Download benchmark for tracking (SPY)
+        if optimization_config.benchmark_ticker:
+            benchmark_tickers = [optimization_config.benchmark_ticker] + backtest_config.benchmark_tickers
+        else:
+            benchmark_tickers = backtest_config.benchmark_tickers
+            
         benchmark_data = download_benchmark_data(
-            backtest_config.benchmark_tickers,
-            backtest_config.start_date,
+            benchmark_tickers,
+            "2009-07-01",  # Extra buffer for optimization
             backtest_config.end_date
         )
         print(f"Downloaded benchmark data for {len(benchmark_data)} benchmarks")
+        
+        # Merge benchmark data with main price data for CLEIR
+        if optimization_config.benchmark_ticker and optimization_config.benchmark_ticker in benchmark_data:
+            # Add benchmark to price data
+            benchmark_prices = benchmark_data[optimization_config.benchmark_ticker]
+            price_data.prices[optimization_config.benchmark_ticker] = benchmark_prices.reindex(price_data.dates)
+            price_data.tickers = price_data.tickers + [optimization_config.benchmark_ticker]
+            print(f"Added {optimization_config.benchmark_ticker} to price data for CLEIR tracking")
         
     except Exception as e:
         print(f"Error downloading benchmark data: {e}")
@@ -137,7 +154,18 @@ def main():
     
     try:
         # Initialize backtester
-        backtester = CVaRIndexBacktest(price_data, optimization_config)
+        if optimization_config.sparsity_bound is not None:
+            # CLEIR mode: pass asset tickers separately
+            backtester = CVaRIndexBacktest(
+                price_data, 
+                optimization_config,
+                asset_tickers=selected_universe  # Don't include benchmark in assets
+            )
+            print("Running CLEIR (CVaR-LASSO Enhanced Index Replication)")
+        else:
+            # Standard CVaR mode
+            backtester = CVaRIndexBacktest(price_data, optimization_config)
+            print("Running standard CVaR optimization")
         
         # Run backtest
         cvar_results = backtester.run_backtest(backtest_config)

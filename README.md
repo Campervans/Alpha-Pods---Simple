@@ -1,20 +1,51 @@
-# CVaR Index - Baseline Implementation
+# CVaR Index - Baseline Implementation with CLEIR
 
-A comprehensive implementation of a Conditional Value at Risk (CVaR) optimized equity index with quarterly rebalancing, transaction costs, and comprehensive backtesting framework.
+A comprehensive implementation of both standard CVaR optimization and CVaR-LASSO Enhanced Index Replication (CLEIR) for equity portfolio construction with quarterly rebalancing, transaction costs, and comprehensive backtesting framework.
 
 ## Project Overview
 
-This project builds a long-only index optimized for 95% daily CVaR over 60 liquid S&P-100 stocks for the period 2010-2024 with quarterly rebalancing and 10 basis points per side transaction costs.
+This project implements two portfolio optimization approaches:
+
+1. **Standard CVaR Optimization**: Minimizes the 95% Conditional Value at Risk of portfolio returns
+2. **CLEIR (CVaR-LASSO Enhanced Index Replication)**: Minimizes the CVaR of tracking error relative to a benchmark index while enforcing sparsity through an L1 norm constraint
+
+Both approaches operate on 60 liquid S&P-100 stocks for the period 2010-2024 with quarterly rebalancing and 10 basis points per side transaction costs.
 
 ### Key Features
 
-- **CVaR Optimization**: Minimizes 95% Conditional Value at Risk using convex optimization
+- **Dual Optimization Modes**: 
+  - Standard CVaR: Minimizes 95% Conditional Value at Risk of portfolio returns
+  - CLEIR: Minimizes CVaR of tracking error with L1 sparsity constraint
 - **Quarterly Rebalancing**: Systematic rebalancing at quarter-end dates
 - **Transaction Costs**: Realistic 10 bps/side transaction cost modeling
 - **Comprehensive Backtesting**: Full simulation with drift adjustment and cost application
 - **Multiple Benchmarks**: Comparison with equal-weight and market-cap benchmarks
 - **Robust Data Handling**: Automated data download, cleaning, and validation
 - **Performance Analytics**: Extensive risk and return metrics with reporting
+- **Sparse Portfolios**: CLEIR mode creates concentrated portfolios with fewer holdings
+
+## CLEIR Methodology
+
+The CVaR-LASSO Enhanced Index Replication (CLEIR) approach solves the following optimization problem:
+
+```
+minimize    CVaR_α(Y_t - Σᵢ wᵢ Rᵢₜ)
+subject to  Σᵢ |wᵢ| ≤ s           (L1 sparsity constraint)
+            Σᵢ wᵢ = 1             (budget constraint)
+            wᵢ ≥ 0                (long-only constraint, optional)
+```
+
+Where:
+- `Y_t` is the benchmark return at time t
+- `Rᵢₜ` is the return of asset i at time t
+- `wᵢ` are the portfolio weights
+- `α` is the confidence level (e.g., 0.95)
+- `s` is the sparsity bound controlling portfolio concentration
+
+This formulation creates portfolios that:
+1. Track the benchmark closely in normal conditions
+2. Minimize downside tracking error during market stress
+3. Use fewer assets due to the L1 constraint, reducing transaction costs
 
 ## Architecture
 
@@ -30,7 +61,8 @@ src/
 │   └── universe.py        # Liquidity-based universe selection
 ├── optimization/          # Portfolio optimization components
 │   ├── risk_models.py     # Risk metric calculations
-│   └── cvar_solver.py     # CVaR optimization using CVXPY
+│   ├── cvar_solver.py     # Standard CVaR optimization using CVXPY
+│   └── cleir_solver.py    # CLEIR optimization (CVaR with L1 constraint)
 └── backtesting/          # Backtesting engine and analytics
     ├── engine.py         # Main backtesting orchestration
     ├── rebalancer.py     # Rebalancing logic and transaction costs
