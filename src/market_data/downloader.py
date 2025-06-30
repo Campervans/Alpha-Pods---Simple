@@ -107,11 +107,11 @@ def download_single_ticker(ticker: str, start: str, end: str,
                     print(f"{'='*60}\n")
                     raise
                 
-                # Debug print to see what we got
-                if hasattr(df, 'shape'):
-                    print(f"Downloaded {ticker}: shape={df.shape}, empty={df.empty}")
-                    if hasattr(df, 'columns'):
-                        print(f"Columns type: {type(df.columns)}, values: {list(df.columns)[:5] if len(df.columns) > 0 else 'empty'}")
+                # Debug print to see what we got (commented out for production)
+                # if hasattr(df, 'shape'):
+                #     print(f"Downloaded {ticker}: shape={df.shape}, empty={df.empty}")
+                #     if hasattr(df, 'columns'):
+                #         print(f"Columns type: {type(df.columns)}, values: {list(df.columns)[:5] if len(df.columns) > 0 else 'empty'}")
                 
                 if df.empty:
                     if attempt < retry_count - 1:
@@ -122,7 +122,7 @@ def download_single_ticker(ticker: str, start: str, end: str,
                 
                 # Handle multi-level columns (when ticker is in column names)
                 if isinstance(df.columns, pd.MultiIndex):
-                    print(f"{ticker} has MultiIndex columns: levels={df.columns.levels}")
+                    # print(f"{ticker} has MultiIndex columns: levels={df.columns.levels}")
                     # More robust handling
                     if len(df.columns.levels) > 1 and ticker in df.columns.get_level_values(1):
                         # If ticker is in the second level, select it
