@@ -115,7 +115,8 @@ class CVaRIndexBacktest:
             # Apply transaction costs directly to portfolio value
             # Cost formula: IndexValue_post = IndexValue_pre * (1 - transaction_cost)
             # Where transaction_cost = turnover * 10bps (0.001)
-            if len(index_values) > 0:
+            # Only apply costs if this is not the first rebalancing (no initial trades)
+            if len(index_values) > 0 and prev_rebal_date is not None:
                 index_values[-1] *= (1 - rebalance_event.transaction_cost)
             
             # update weights
