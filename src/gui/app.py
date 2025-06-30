@@ -42,8 +42,8 @@ class CVaRGUI:
     def show_main_menu(self):
         """Display main menu."""
         # Create ASCII banner
-        figlet = Figlet(font='standard')
-        ascii_banner = figlet.renderText('eToro - AlphaPod')
+        figlet = Figlet(font='standard', justify='center')
+        ascii_banner = figlet.renderText('eToro Alpha Pod')
         
         # eToro green color style
         etoro_green = Style(color="#6ebe44")  # eToro brand green
@@ -506,7 +506,11 @@ class CVaRGUI:
                 progress.remove_task(task)
             
             if result['success']:
-                show_success(f"Downloaded {result['n_assets']} assets")
+                show_success(f"Downloaded {result['n_assets']} assets from {result['start_date']} to {result['end_date']}")
+                if 'warning' in result:
+                    show_info(f"⚠️  {result['warning']}")
+                if 'failed_tickers' in result and result['failed_tickers']:
+                    show_info(f"Note: Portfolio optimization will continue with {result['n_assets']} available assets")
             else:
                 show_error(f"Download failed: {result['error']}")
         

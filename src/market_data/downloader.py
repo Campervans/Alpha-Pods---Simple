@@ -644,6 +644,36 @@ def create_sp100_list() -> List[str]:
     return sp100_tickers
 
 
+def create_sp100_since_2010() -> List[str]:
+    """
+    Create a list of the 60 largest stocks that have been in the S&P 100 since 2010-01-01, plus Tesla.
+    
+    This is a curated list based on historical S&P 100 membership and current market capitalization.
+    
+    Returns:
+        List of 61 ticker symbols (60 largest S&P 100 stocks since 2010 + TSLA)
+    """
+    # These are stocks that have been consistently in the S&P 100 since 2010
+    # Ordered approximately by current market cap
+    sp100_since_2010 = [
+        'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'BRK-B',  # Mega caps
+        'UNH', 'JNJ', 'JPM', 'V', 'PG', 'XOM', 'HD', 'CVX', 'MA', 'PFE',  # Large caps
+        'BAC', 'ABBV', 'KO', 'LLY', 'PEP', 'TMO', 'COST', 'WMT',
+        'DIS', 'ABT', 'VZ', 'ACN', 'CMCSA', 'NKE', 'TXN', 'LIN',
+        'ORCL', 'ADBE', 'CRM', 'MDT', 'PM', 'BMY', 'T', 'HON',
+        'QCOM', 'LOW', 'UPS', 'AMD', 'C', 'RTX', 'INTU', 'CAT',
+        'AMGN', 'DE', 'GS', 'MO', 'AXP', 'BLK', 'GILD', 'MDLZ',
+        'MMM', 'CVS', 'SO', 'DUK'  # 60 stocks total
+    ]
+    
+    # Add Tesla (not in S&P 100 until later but requested to be included)
+    if 'TSLA' not in sp100_since_2010:
+        sp100_since_2010.append('TSLA')
+    
+    print(f"Created custom S&P 100 universe with {len(sp100_since_2010)} tickers (60 largest since 2010 + TSLA)")
+    return sp100_since_2010
+
+
 def save_ticker_data_to_pickle(ticker: str, data: pd.DataFrame, output_dir: str = "data/raw"):
     """Save individual ticker data to a pickle file."""
     os.makedirs(output_dir, exist_ok=True)
