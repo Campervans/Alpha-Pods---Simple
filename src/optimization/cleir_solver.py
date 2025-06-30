@@ -46,8 +46,10 @@ def create_cleir_problem(
     z = cp.Variable(n_periods, name="z")  # Auxiliary variables for CVaR
     u = cp.Variable(n_assets, name="u")  # Auxiliary variables for L1 norm
     
-    # Tracking error: Y_t - sum(w_i * R_it)
+    # Tracking error: portfolio return - benchmark return
+    # We want to minimize downside risk, so we look at negative tracking error
     portfolio_returns = asset_returns @ w
+    # Use negative tracking error so CVaR captures underperformance
     tracking_error = benchmark_returns - portfolio_returns
     
     # CVaR objective: zeta + 1/(n*(1-alpha)) * sum(z)
@@ -72,8 +74,8 @@ def create_cleir_problem(
     ]
     
     # Add weight bounds if specified
-    if config.min_weight > 0:
-        constraints.append(w >= config.min_weight)
+    # Always enforce non-negativity for long-only portfolios
+    constraints.append(w >= config.min_weight)
     if config.max_weight < 1:
         constraints.append(w <= config.max_weight)
     
@@ -195,6 +197,19 @@ def solve_cleir(
                         print(f"Normalizing weights (sum was {weight_sum:.6f})")
                     optimal_weights = optimal_weights / weight_sum
                 
+                # Clean up numerical noise - set very small weights to zero
+                optimal_weights[np.abs(optimal_weights) < 1e-6] = 0.0
+                
+                # Check for negative weights after cleanup
+                if np.any(optimal_weights < 0):
+                    print(f"WARNING: Negative weights detected after optimization!")
+                    print(f"Min weight: {np.min(optimal_weights)}")
+                    print(f"Negative weights at indices: {np.where(optimal_weights < 0)[0]}")
+                    # Force to zero
+                    optimal_weights = np.maximum(optimal_weights, 0.0)
+                    # Renormalize
+                    optimal_weights = optimal_weights / np.sum(optimal_weights)
+                
                 # Calculate sparsity metrics
                 sparsity_threshold = 1e-6
                 n_nonzero = np.sum(np.abs(optimal_weights) > sparsity_threshold)
@@ -215,7 +230,7 @@ def solve_cleir(
                 if verbose:
                     print(f"✓ {solver_name} succeeded!")
                     print(f"  Objective: {problem.value:.6f}")
-                    print(f"  Sparsity: {n_nonzero}/{n_assets} assets")
+                    print(f"  Sparsity: {n_nonzero}/{asset_returns.shape[1]} assets")
                     print(f"  L1 norm: {l1_norm:.4f} (bound: {config.sparsity_bound})")
                 
                 return optimal_weights, solver_info
