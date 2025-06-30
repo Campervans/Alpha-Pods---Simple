@@ -207,7 +207,7 @@ def solve_cleir(
                     'solve_time': time.time() - start_time,
                     'objective_value': problem.value,
                     'n_iterations': problem.solver_stats.num_iters if hasattr(problem.solver_stats, 'num_iters') else 0,
-                    'solver_stats': dict(problem.solver_stats) if problem.solver_stats else {},
+                    'solver_stats': problem.solver_stats.__dict__ if hasattr(problem.solver_stats, '__dict__') else {},
                     'sparsity': n_nonzero,
                     'l1_norm': l1_norm,
                 })
