@@ -87,6 +87,8 @@ class OptimizationController:
     def run_cvar_optimization(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Run CVaR optimization with given config."""
         try:
+            from src.utils.core import annualize_return, calculate_sharpe_ratio, calculate_max_drawdown
+            
             # Create configs
             universe_config = UniverseConfig(
                 n_stocks=config.get('n_stocks', 60),
@@ -110,14 +112,55 @@ class OptimizationController:
                 initial_capital=100.0
             )
             
-            # Run optimization
-            # ... (simplified for brevity)
+            # Get S&P 100 tickers
+            tickers = create_sp100_list()
+            
+            # Download price data
+            price_data = download_universe(
+                tickers, 
+                backtest_config.start_date, 
+                backtest_config.end_date,
+                min_data_points=252,
+                use_cache=True,
+                cache_dir="data/raw"
+            )
+            
+            # Select liquid universe
+            liquid_universe = select_liquid_universe(
+                price_data, 
+                universe_config, 
+                backtest_config.start_date
+            )
+            
+            # Create and run backtest
+            backtest = CVaRIndexBacktest(
+                price_data=liquid_universe,
+                optimization_config=optimization_config,
+                backtest_config=backtest_config
+            )
+            
+            results = backtest.run()
+            
+            # Calculate metrics
+            total_return = (results['index_values'][-1] / 100.0) - 1.0
+            annual_return = annualize_return(total_return, len(results['returns']), 252)
+            sharpe_ratio = calculate_sharpe_ratio(results['returns'], 0.0, 252)
+            max_dd = calculate_max_drawdown(results['returns'])
+            
+            # Save results
+            results_df = pd.DataFrame({
+                'Date': results['dates'],
+                'Index_Value': results['index_values']
+            })
+            results_df.to_csv('results/cvar_index_gui.csv', index=False)
             
             return {
                 'success': True,
-                'annual_return': 0.15,  # Placeholder
-                'sharpe_ratio': 1.5,    # Placeholder
-                'max_drawdown': 0.10    # Placeholder
+                'annual_return': annual_return,
+                'sharpe_ratio': sharpe_ratio,
+                'max_drawdown': max_dd,
+                'final_value': results['index_values'][-1],
+                'total_return': total_return
             }
             
         except Exception as e:
@@ -125,10 +168,102 @@ class OptimizationController:
     
     def run_cleir_optimization(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Run CLEIR optimization with given config."""
-        # Similar to CVaR but with CLEIR parameters
-        config['sparsity_bound'] = config.get('sparsity_bound', 1.2)
-        config['benchmark_ticker'] = config.get('benchmark_ticker', 'SPY')
-        return self.run_cvar_optimization(config)
+        try:
+            from src.utils.core import annualize_return, calculate_sharpe_ratio, calculate_max_drawdown
+            
+            # Create configs
+            universe_config = UniverseConfig(
+                n_stocks=config.get('n_stocks', 60),
+                lookback_days=config.get('universe_lookback', 126),
+                min_price=config.get('min_price', 5.0)
+            )
+            
+            optimization_config = OptimizationConfig(
+                confidence_level=config.get('confidence_level', 0.95),
+                lookback_days=config.get('optimization_lookback', 252),
+                max_weight=config.get('max_weight', 0.05),
+                min_weight=0.0,
+                solver="CLARABEL",
+                sparsity_bound=config.get('sparsity_bound', 1.2),
+                benchmark_ticker=config.get('benchmark_ticker', 'SPY')
+            )
+            
+            backtest_config = BacktestConfig(
+                start_date=config.get('start_date', '2010-01-01'),
+                end_date=config.get('end_date', '2024-12-31'),
+                rebalance_frequency=config.get('rebalance_freq', 'quarterly'),
+                transaction_cost_bps=config.get('transaction_cost', 10.0),
+                initial_capital=100.0
+            )
+            
+            # Get S&P 100 tickers
+            tickers = create_sp100_list()
+            
+            # Download price data
+            price_data = download_universe(
+                tickers, 
+                backtest_config.start_date, 
+                backtest_config.end_date,
+                min_data_points=252,
+                use_cache=True,
+                cache_dir="data/raw"
+            )
+            
+            # Download benchmark data if needed
+            if optimization_config.benchmark_ticker:
+                benchmark_data = download_benchmark_data(
+                    [optimization_config.benchmark_ticker],
+                    backtest_config.start_date,
+                    backtest_config.end_date
+                )
+                
+                # Add benchmark to price data
+                if optimization_config.benchmark_ticker in benchmark_data:
+                    benchmark_prices = benchmark_data[optimization_config.benchmark_ticker]
+                    price_data.prices[optimization_config.benchmark_ticker] = benchmark_prices.reindex(price_data.dates)
+                    price_data.volumes[optimization_config.benchmark_ticker] = pd.Series(1e6, index=price_data.dates)
+                    price_data.tickers = price_data.tickers + [optimization_config.benchmark_ticker]
+            
+            # Select liquid universe
+            liquid_universe = select_liquid_universe(
+                price_data, 
+                universe_config, 
+                backtest_config.start_date
+            )
+            
+            # Create and run backtest
+            backtest = CVaRIndexBacktest(
+                price_data=liquid_universe,
+                optimization_config=optimization_config,
+                backtest_config=backtest_config
+            )
+            
+            results = backtest.run()
+            
+            # Calculate metrics
+            total_return = (results['index_values'][-1] / 100.0) - 1.0
+            annual_return = annualize_return(total_return, len(results['returns']), 252)
+            sharpe_ratio = calculate_sharpe_ratio(results['returns'], 0.0, 252)
+            max_dd = calculate_max_drawdown(results['returns'])
+            
+            # Save results
+            results_df = pd.DataFrame({
+                'Date': results['dates'],
+                'Index_Value': results['index_values']
+            })
+            results_df.to_csv('results/cleir_index_gui.csv', index=False)
+            
+            return {
+                'success': True,
+                'annual_return': annual_return,
+                'sharpe_ratio': sharpe_ratio,
+                'max_drawdown': max_dd,
+                'final_value': results['index_values'][-1],
+                'total_return': total_return
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
 
 class ResultsController:
