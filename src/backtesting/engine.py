@@ -212,7 +212,7 @@ class CVaRIndexBacktest:
         n_assets = len(self.asset_tickers)
         
         if len(hist_asset_returns) < 50:
-            print(f"⚠️ Only {len(hist_asset_returns)} obs - using equal weights")
+            console.print(f"[orange]⚠️ Only {len(hist_asset_returns)} obs - using equal weights[/orange]")
             equal_weights = np.ones(n_assets) / n_assets
             return equal_weights, {'status': 'INSUFFICIENT_DATA'}
         
@@ -225,7 +225,7 @@ class CVaRIndexBacktest:
                     benchmark_returns.to_frame(), rebal_date
                 ).flatten()
             else:
-                print(f"Warning: Benchmark {self.optimization_config.benchmark_ticker} not found in data")
+                console.print(f"[orange]Warning: Benchmark {self.optimization_config.benchmark_ticker} not found in data[/orange]")
         
         # run optimization
         try:
@@ -254,7 +254,7 @@ class CVaRIndexBacktest:
             return optimal_weights, solver_info
             
         except Exception as e:
-            print(f"Opt failed: {e}")
+            console.print(f"[red]Optimization failed: {e}[/red]")
             # fallback
             equal_weights = np.ones(n_assets) / n_assets
             return equal_weights, {'status': 'OPTIMIZATION_ERROR', 'error': str(e)}
