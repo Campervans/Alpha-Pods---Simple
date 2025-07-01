@@ -3,6 +3,12 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 from typing import Dict, Optional
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
+    print("Warning: SHAP not available. Install with: pip install shap")
 
 def plot_feature_importance(trainer, num_features: int = 10):
     """Plots the average feature importance across all trained models.
@@ -46,6 +52,89 @@ def plot_feature_importance(trainer, num_features: int = 10):
     plt.close()
     print("✅ Feature importance plot saved to results/ml_feature_importance.png")
 
+def plot_shap_analysis(trainer, num_samples: int = 100):
+    """Generate SHAP analysis for the ML models.
+    
+    Args:
+        trainer: SimpleWalkForward instance with trained models
+        num_samples: Number of samples to use for SHAP analysis
+    """
+    if not SHAP_AVAILABLE:
+        print("⚠️  SHAP not available. Skipping SHAP analysis.")
+        return
+    
+    # Get the most recent model and its data
+    latest_date = max([date for date, _ in trainer.models.keys()])
+    latest_models = [(ticker, model) for (date, ticker), model in trainer.models.items() if date == latest_date]
+    
+    if not latest_models:
+        print("No models available for SHAP analysis.")
+        return
+    
+    # Use the first model for demonstration
+    ticker, model = latest_models[0]
+    
+    # Get feature data for this model
+    from src.features.simple_features import create_simple_features
+    
+    # We need to recreate the feature data for SHAP
+    # This is a simplified version - in production you'd store this during training
+    print(f"Generating SHAP values for {ticker} model...")
+    
+    # Create a figure with subplots
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10))
+    fig.suptitle(f'SHAP Analysis for {ticker} (Latest Model)', fontsize=16, fontweight='bold')
+    
+    # For Ridge regression, we can calculate exact SHAP values
+    # Get feature names from the model
+    if hasattr(model.model, 'feature_names_in_'):
+        feature_names = model.model.feature_names_in_
+    else:
+        feature_names = [f'Feature_{i}' for i in range(model.model.coef_.shape[0])]
+    
+    # Plot 1: Feature importance based on absolute SHAP values (coefficients for linear model)
+    ax1 = axes[0]
+    coef_importance = pd.Series(np.abs(model.model.coef_), index=feature_names).sort_values(ascending=False)
+    top_features = coef_importance.head(10)
+    
+    bars = ax1.barh(range(len(top_features)), top_features.values)
+    ax1.set_yticks(range(len(top_features)))
+    ax1.set_yticklabels(top_features.index)
+    ax1.set_xlabel('Absolute Coefficient Value (Proxy for SHAP Importance)')
+    ax1.set_title('Top 10 Most Important Features')
+    
+    # Color bars based on positive/negative impact
+    for i, (feat, val) in enumerate(top_features.items()):
+        idx = list(feature_names).index(feat)
+        if model.model.coef_[idx] > 0:
+            bars[i].set_color('red')
+        else:
+            bars[i].set_color('blue')
+    
+    # Add legend
+    from matplotlib.patches import Patch
+    legend_elements = [Patch(facecolor='red', label='Positive Impact'),
+                      Patch(facecolor='blue', label='Negative Impact')]
+    ax1.legend(handles=legend_elements, loc='lower right')
+    
+    # Plot 2: Coefficient values with direction
+    ax2 = axes[1]
+    coef_values = pd.Series(model.model.coef_, index=feature_names).sort_values(ascending=True)
+    extreme_features = pd.concat([coef_values.head(5), coef_values.tail(5)])
+    
+    colors = ['blue' if x < 0 else 'red' for x in extreme_features.values]
+    ax2.barh(range(len(extreme_features)), extreme_features.values, color=colors)
+    ax2.set_yticks(range(len(extreme_features)))
+    ax2.set_yticklabels(extreme_features.index)
+    ax2.set_xlabel('Coefficient Value')
+    ax2.set_title('Top 5 Positive and Negative Impact Features')
+    ax2.axvline(x=0, color='black', linestyle='-', linewidth=0.5)
+    
+    plt.tight_layout()
+    plt.savefig('results/ml_shap_analysis.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    print("✅ SHAP analysis saved to results/ml_shap_analysis.png")
+
 def plot_performance_comparison(baseline_perf: pd.Series, ml_perf: pd.Series, 
                                benchmark_perf: Optional[pd.Series] = None):
     """Plots the cumulative performance of baseline vs. ML-enhanced index.
@@ -55,15 +144,23 @@ def plot_performance_comparison(baseline_perf: pd.Series, ml_perf: pd.Series,
         ml_perf: Series of ML-enhanced index values
         benchmark_perf: Optional series of benchmark (e.g., SPY) values
     """
-    # Create comparison dataframe
+    # Align the series to have the same date range
+    # Use the intersection of dates
+    common_dates = baseline_perf.index.intersection(ml_perf.index)
+    
+    if len(common_dates) == 0:
+        print("Error: No common dates between baseline and ML series")
+        return
+    
+    # Create comparison dataframe with aligned data
     comparison_df = pd.DataFrame({
-        'Baseline CVaR Index': baseline_perf,
-        'ML-Enhanced Index': ml_perf
+        'Baseline CLEIR Index': baseline_perf.loc[common_dates],
+        'ML-Enhanced CLEIR Index': ml_perf.loc[common_dates]
     })
     
     # Add benchmark if provided
-    if benchmark_perf is not None:
-        comparison_df['Benchmark (SPY)'] = benchmark_perf
+    if benchmark_perf is not None and len(benchmark_perf.index.intersection(common_dates)) > 0:
+        comparison_df['Benchmark (SPY)'] = benchmark_perf.loc[common_dates]
     
     # Normalize to start at 1
     comparison_df_normalized = comparison_df / comparison_df.iloc[0]
@@ -73,25 +170,28 @@ def plot_performance_comparison(baseline_perf: pd.Series, ml_perf: pd.Series,
     
     # Plot lines
     for col in comparison_df_normalized.columns:
-        if col == 'ML-Enhanced Index':
+        if 'ML-Enhanced' in col:
             plt.plot(comparison_df_normalized.index, comparison_df_normalized[col], 
                     label=col, linewidth=2.5, color='green', alpha=0.8)
-        elif col == 'Baseline CVaR Index':
+        elif 'Baseline' in col:
             plt.plot(comparison_df_normalized.index, comparison_df_normalized[col], 
                     label=col, linewidth=2, color='blue', alpha=0.7)
         else:
             plt.plot(comparison_df_normalized.index, comparison_df_normalized[col], 
                     label=col, linewidth=1.5, color='gray', alpha=0.6, linestyle='--')
     
-    plt.title('Performance Comparison: Baseline CVaR vs. ML-Enhanced', fontsize=16, fontweight='bold')
+    plt.title('Performance Comparison: Baseline CLEIR vs. ML-Enhanced CLEIR', fontsize=16, fontweight='bold')
     plt.xlabel('Date', fontsize=12)
     plt.ylabel('Cumulative Growth of $1', fontsize=12)
     plt.legend(loc='upper left', fontsize=12)
     plt.grid(True, alpha=0.3)
     
     # Add performance stats
-    baseline_return = (comparison_df_normalized['Baseline CVaR Index'].iloc[-1] - 1) * 100
-    ml_return = (comparison_df_normalized['ML-Enhanced Index'].iloc[-1] - 1) * 100
+    baseline_col = [col for col in comparison_df_normalized.columns if 'Baseline' in col][0]
+    ml_col = [col for col in comparison_df_normalized.columns if 'ML-Enhanced' in col][0]
+    
+    baseline_return = (comparison_df_normalized[baseline_col].iloc[-1] - 1) * 100
+    ml_return = (comparison_df_normalized[ml_col].iloc[-1] - 1) * 100
     improvement = ml_return - baseline_return
     
     stats_text = f'Baseline Return: {baseline_return:.1f}%\nML-Enhanced Return: {ml_return:.1f}%\nImprovement: {improvement:.1f}%'

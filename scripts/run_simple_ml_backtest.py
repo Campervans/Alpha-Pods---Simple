@@ -12,7 +12,8 @@ from src.analysis.simple_interpretability import (
     plot_feature_importance, 
     plot_performance_comparison,
     analyze_ml_predictions,
-    create_performance_report
+    create_performance_report,
+    plot_shap_analysis
 )
 
 def calculate_performance_metrics(daily_values: pd.Series) -> dict:
@@ -109,6 +110,9 @@ def main():
     # Feature importance plot
     if hasattr(backtest, 'trainer') and backtest.trainer.models:
         plot_feature_importance(backtest.trainer)
+        
+        # SHAP analysis
+        plot_shap_analysis(backtest.trainer)
     
     # Performance comparison plot
     if baseline is not None:
