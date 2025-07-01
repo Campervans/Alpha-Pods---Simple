@@ -87,10 +87,14 @@ def plot_shap_analysis(trainer, num_samples: int = 100):
     
     # For Ridge regression, we can calculate exact SHAP values
     # Get feature names from the model
-    if hasattr(model.model, 'feature_names_in_'):
+    if hasattr(model, 'feature_names') and model.feature_names is not None:
+        feature_names = model.feature_names
+    elif hasattr(model.model, 'feature_names_in_'):
         feature_names = model.model.feature_names_in_
     else:
-        feature_names = [f'Feature_{i}' for i in range(model.model.coef_.shape[0])]
+        # Default feature names based on simple_features.py
+        feature_names = ['return_1m', 'return_3m', 'return_6m', 
+                        'volatility_1m', 'volatility_3m', 'volume_ratio', 'rsi']
     
     # Plot 1: Feature importance based on absolute SHAP values (coefficients for linear model)
     ax1 = axes[0]
