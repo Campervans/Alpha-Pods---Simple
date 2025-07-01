@@ -13,7 +13,8 @@ from src.analysis.simple_interpretability import (
     plot_performance_comparison,
     analyze_ml_predictions,
     create_performance_report,
-    plot_shap_analysis
+    plot_shap_analysis,
+    plot_predictions_diagnostics
 )
 
 def calculate_performance_metrics(daily_values: pd.Series) -> dict:
@@ -121,6 +122,30 @@ def main():
     # ML predictions analysis
     if 'ml_predictions' in ml_results and 'selected_universes' in ml_results:
         analyze_ml_predictions(ml_results['ml_predictions'], ml_results['selected_universes'])
+        
+        # New comprehensive diagnostics
+        # Load returns data for diagnostics
+        try:
+            import pickle
+            data_path = 'data/processed/price_data.pkl'
+            if os.path.exists(data_path):
+                with open(data_path, 'rb') as f:
+                    data_dict = pickle.load(f)
+                
+                # Convert to DataFrame if needed
+                if isinstance(data_dict, dict) and 'prices' in data_dict:
+                    price_df = pd.DataFrame(
+                        data_dict['prices'],
+                        index=pd.to_datetime(data_dict['dates']),
+                        columns=data_dict['tickers']
+                    )
+                else:
+                    price_df = data_dict
+                
+                returns_data = price_df.pct_change().dropna()
+                plot_predictions_diagnostics(ml_results['ml_predictions'], returns_data)
+        except Exception as e:
+            print(f"⚠️  Could not generate prediction diagnostics: {str(e)}")
     
     # 5. Generate performance report
     print("\n📄 Generating performance report...")

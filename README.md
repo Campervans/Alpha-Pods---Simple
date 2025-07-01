@@ -312,6 +312,58 @@ The system calculates comprehensive performance metrics:
 2. **Solver Speed**: Use ECOS for fastest solving, SCS for robustness
 3. **Memory Usage**: Process data in chunks for very large universes
 
+## ML-Enhanced CLEIR with Alpha Overlay
+
+The project includes an ML-enhanced version of CLEIR that uses machine learning to predict alpha and select the most promising stocks before optimization.
+
+### Running ML-Enhanced Backtest
+
+```bash
+python scripts/run_simple_ml_backtest.py
+```
+
+This will:
+1. Train Ridge regression models using 7 technical features
+2. Predict quarterly alphas for all stocks
+3. Select top 30 stocks based on predicted alpha
+4. Run CLEIR optimization on the selected universe
+5. Generate comprehensive visualizations including SHAP analysis
+
+### Interpreting ML Alphas with SHAP
+
+The ML models are explained using SHAP (SHapley Additive exPlanations), providing insights into:
+
+- **Global Feature Importance**: Which features drive predictions across all stocks
+- **Feature Distributions**: How feature values affect predictions (beeswarm plot)
+- **Feature Dependencies**: Non-linear relationships between features and predictions
+- **Model Transparency**: Exact contribution of each feature to each prediction
+
+#### SHAP Visualizations
+
+The system generates `ml_shap_analysis.png` containing:
+
+1. **Feature Importance Bar Chart**: Mean absolute SHAP values showing overall feature impact
+2. **Beeswarm Plot**: Distribution of SHAP values for each feature across all predictions
+3. **Dependence Plots**: Detailed view of top features' impact on predictions
+
+#### ML Predictions Diagnostics
+
+The `ml_predictions_analysis.png` provides comprehensive diagnostics:
+
+1. **Predicted vs Realized Returns**: Scatter plot with regression line and R²
+2. **Information Coefficient (IC)**: Rolling correlation between predictions and outcomes
+3. **Prediction Distribution**: Inter-quartile range showing prediction spread over time
+4. **Rank Stability**: Autocorrelation of prediction ranks across quarters
+
+### ML Features
+
+The model uses 7 technical features:
+
+- **Momentum**: 1-month, 3-month, and 6-month returns
+- **Volatility**: 1-month and 3-month rolling volatility
+- **Volume**: Ratio of current to 21-day average volume
+- **RSI**: 14-day Relative Strength Index
+
 ## Advanced Features
 
 ### Custom Risk Models
