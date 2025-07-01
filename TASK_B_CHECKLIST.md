@@ -44,6 +44,14 @@
 - [x] **Interpretability**: Linear model, feature importance
 - [x] **Integration**: Works with existing CLEIR system
 
+### GUI Integration ✅
+- [x] Added "TASK B - Run Alpha Overlay Enhancement" to main menu
+- [x] Created `run_ml_enhancement()` method in `CVaRGUI` class
+- [x] Updated results viewer to show Task B deliverables
+- [x] Added Task B requirements to About section
+- [x] Integrated ML script execution with progress feedback
+- [x] Error handling and results display
+
 ## How to Run
 
 ```bash
