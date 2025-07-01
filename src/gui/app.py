@@ -61,7 +61,8 @@ class CVaRGUI:
         options = [
             "TASK A - Run CLEIR Optimization",
             "TASK A - Run CVaR Optimization",
-            "TASK A - View Results",
+            "TASK B - Run Alpha Overlay Enhancement",
+            "TASK A&B - View Results",
             "Data Management",
             "About",
             "Exit"
@@ -74,12 +75,14 @@ class CVaRGUI:
         elif choice == "2":
             self.run_cvar_optimization()
         elif choice == "3":
-            self.view_results()
+            self.run_ml_enhancement()
         elif choice == "4":
-            self.data_management_menu()
+            self.view_results()
         elif choice == "5":
-            self.show_about()
+            self.data_management_menu()
         elif choice == "6":
+            self.show_about()
+        elif choice == "7":
             self.running = False
             show_info("Goodbye!")
     
@@ -202,6 +205,114 @@ class CVaRGUI:
         
         console.input("\nPress Enter to continue...")
     
+    def run_ml_enhancement(self):
+        """Run ML-enhanced CLEIR optimization."""
+        clear_screen()
+        console.print(create_header("ML-Enhanced CLEIR (Alpha Overlay)"))
+        
+        # Show information about the ML enhancement
+        info_text = Text()
+        info_text.append("This feature enhances the CLEIR optimization with machine learning:\n\n", style="bold")
+        info_text.append("• Uses Ridge regression to predict 3-month returns\n")
+        info_text.append("• Features: momentum, volatility, volume, and RSI indicators\n")
+        info_text.append("• Selects top 30 stocks based on alpha predictions\n")
+        info_text.append("• Applies CLEIR optimization to the selected universe\n")
+        info_text.append("• Walk-forward training prevents look-ahead bias\n")
+        
+        console.print(Panel(info_text, title="ML Enhancement Overview", border_style="cyan"))
+        console.print()
+        
+        # Get parameters
+        config = {
+            'start_date': get_text_input("Start date", default="2020-01-01"),
+            'end_date': get_text_input("End date", default="2024-12-31"),
+            'top_k': int(get_text_input("Number of stocks to select", default="30")),
+            'train_years': int(get_text_input("Training window (years)", default="3")),
+            'rebalance_freq': get_text_input("Rebalance frequency", default="quarterly")
+        }
+        
+        # Show config summary
+        console.print("\n")
+        console.print(create_data_table("ML Configuration", config))
+        
+        if confirm_action("\nProceed with ML-enhanced optimization?"):
+            show_info("Running ML-enhanced backtest... This may take several minutes.")
+            
+            with create_progress_spinner("Running ML enhancement...") as progress:
+                task = progress.add_task("Processing...", total=None)
+                
+                try:
+                    # Run the ML backtest script
+                    import subprocess
+                    import json
+                    
+                    # Prepare command
+                    script_path = Path(__file__).parent.parent.parent / 'scripts' / 'run_simple_ml_backtest.py'
+                    
+                    # Run the script and capture output
+                    result = subprocess.run(
+                        [sys.executable, str(script_path)],
+                        capture_output=True,
+                        text=True,
+                        cwd=str(Path(__file__).parent.parent.parent)
+                    )
+                    
+                    progress.remove_task(task)
+                    
+                    if result.returncode == 0:
+                        show_success("ML enhancement completed!")
+                        
+                        # Try to load and show results
+                        results_path = Path(__file__).parent.parent.parent / 'results' / 'ml_enhanced_index.csv'
+                        if results_path.exists():
+                            df = pd.read_csv(results_path, index_col=0)
+                            
+                            # Calculate metrics
+                            initial_value = df.iloc[0]
+                            final_value = df.iloc[-1]
+                            total_return = (final_value / initial_value - 1)
+                            
+                            console.print("\n[bold cyan]ML-Enhanced Results:[/bold cyan]")
+                            results_table = Table(show_header=False, box=box.SIMPLE)
+                            results_table.add_column("Metric", style="dim")
+                            results_table.add_column("Value", style="bold green")
+                            
+                            results_table.add_row("Final Index Value", f"{final_value:.2f}")
+                            results_table.add_row("Total Return", f"{total_return:.2%}")
+                            results_table.add_row("Results saved to", "results/ml_enhanced_index.csv")
+                            
+                            console.print(results_table)
+                            
+                            # List generated files
+                            console.print("\n[bold]Generated files:[/bold]")
+                            files = [
+                                "ml_enhanced_index.csv",
+                                "ml_feature_importance.png",
+                                "ml_performance_comparison.png",
+                                "ml_predictions_analysis.png",
+                                "ml_method_note.md"
+                            ]
+                            for file in files:
+                                file_path = Path(__file__).parent.parent.parent / 'results' / file
+                                if file_path.exists():
+                                    console.print(f"  ✓ {file}")
+                        
+                        # Show output from script
+                        if result.stdout:
+                            console.print("\n[dim]Script output:[/dim]")
+                            console.print(Panel(result.stdout[-2000:], expand=False))  # Last 2000 chars
+                    else:
+                        show_error("ML enhancement failed!")
+                        if result.stderr:
+                            console.print("\n[red]Error output:[/red]")
+                            console.print(result.stderr)
+                        
+                except Exception as e:
+                    progress.remove_task(task)
+                    show_error(f"Error running ML enhancement: {str(e)}")
+        
+        console.input("\nPress Enter to continue...")
+    
     def show_about(self):
         """Show about screen."""
         clear_screen()
@@ -223,11 +334,17 @@ class CVaRGUI:
         
         about_text.append("GitHub: ", style="dim")
         about_text.append("https://github.com/Campervans/Alpha-Pods---Simple\n", style="cyan underline")
-        about_text.append("\nTask Requirements:\n", style="bold")
+        about_text.append("\nTask A Requirements:\n", style="bold")
         about_text.append("• Universe: 60 liquid stocks from S&P 100\n")
         about_text.append("• Optimization: 95% daily CVaR\n")
         about_text.append("• Constraints: Long-only, max 5% per stock\n")
         about_text.append("• Rebalancing: Quarterly with 10bps costs\n")
+        
+        about_text.append("\nTask B Requirements:\n", style="bold")
+        about_text.append("• ML Enhancement: Ridge regression with technical features\n")
+        about_text.append("• Alpha Overlay: Select top 30 stocks based on predictions\n")
+        about_text.append("• Walk-Forward: 3-year training window, no look-ahead bias\n")
+        about_text.append("• Interpretability: Feature importance visualization\n")
         
         console.print(Panel(about_text))
         console.input("\nPress Enter to continue...")
@@ -246,20 +363,42 @@ class CVaRGUI:
             status_table.add_column("Status", style="green")
             status_table.add_column("File", style="dim")
             
+            # Task A deliverables
             status_table.add_row(
-                "Daily Index Values", 
+                "[bold]Task A:[/bold] Daily Index Values", 
                 "✓" if status['daily_values'] else "✗",
                 "daily_index_values.csv"
             )
             status_table.add_row(
-                "Performance Metrics", 
+                "[bold]Task A:[/bold] Performance Metrics", 
                 "✓" if status['metrics_table'] else "✗",
                 "performance_summary.csv"
             )
             status_table.add_row(
-                "Comparison Plot", 
+                "[bold]Task A:[/bold] Comparison Plot", 
                 "✓" if status['comparison_plot'] else "✗",
                 "index_performance_analysis.png"
+            )
+            
+            # Task B deliverables
+            ml_results_path = Path(self.results_controller.results_dir) / 'ml_enhanced_index.csv'
+            ml_feature_path = Path(self.results_controller.results_dir) / 'ml_feature_importance.png'
+            ml_method_path = Path(self.results_controller.results_dir) / 'ml_method_note.md'
+            
+            status_table.add_row(
+                "[bold]Task B:[/bold] ML Enhanced Index", 
+                "✓" if ml_results_path.exists() else "✗",
+                "ml_enhanced_index.csv"
+            )
+            status_table.add_row(
+                "[bold]Task B:[/bold] Feature Importance", 
+                "✓" if ml_feature_path.exists() else "✗",
+                "ml_feature_importance.png"
+            )
+            status_table.add_row(
+                "[bold]Task B:[/bold] Method Note", 
+                "✓" if ml_method_path.exists() else "✗",
+                "ml_method_note.md"
             )
             
             console.print(status_table)
