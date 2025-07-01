@@ -15,14 +15,20 @@ from datetime import datetime
 import warnings
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.schemas import UniverseConfig, OptimizationConfig, BacktestConfig
-from market_data.downloader import create_sp100_list, download_universe, save_price_data, download_benchmark_data
-from market_data.universe import select_liquid_universe, create_equal_weight_universe
-from backtesting.engine import CVaRIndexBacktest
-from backtesting.metrics import create_performance_report, create_monthly_returns_table, save_performance_report, plot_performance_comparison
-from optimization.risk_models import calculate_portfolio_returns
+from src.utils.schemas import UniverseConfig, OptimizationConfig, BacktestConfig
+from src.market_data.downloader import (
+    create_sp100_list, 
+    create_sp100_since_2010,
+    download_universe, 
+    save_price_data,
+    download_benchmark_data
+)
+from src.market_data.universe import select_liquid_universe, create_equal_weight_universe
+from src.backtesting.engine import CVaRIndexBacktest
+from src.backtesting.metrics import create_performance_report, create_monthly_returns_table, save_performance_report, plot_performance_comparison
+from src.optimization.risk_models import calculate_portfolio_returns
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -49,7 +55,10 @@ def main():
         lookback_days=252,  # 1 year
         max_weight=0.05,    # 5% max per stock
         min_weight=0.0,     # Long-only
-        solver="ECOS"
+        solver="ECOS",
+        # CLEIR parameters
+        sparsity_bound=1.2,  # L1 norm constraint (allows ~80% of assets)
+        benchmark_ticker="SPY"  # Track S&P 500
     )
     
     backtest_config = BacktestConfig(
@@ -67,8 +76,8 @@ def main():
     print("="*50)
     
     try:
-        # Get S&P 100 candidate list
-        sp100_tickers = create_sp100_list()
+        # Get S&P 100 tickers
+        sp100_tickers = create_sp100_since_2010()
         print(f"Loaded {len(sp100_tickers)} S&P 100 candidates")
         
         # Select liquid universe
@@ -119,12 +128,28 @@ def main():
     print("="*50)
     
     try:
+        # Download benchmark for tracking (SPY)
+        if optimization_config.benchmark_ticker:
+            benchmark_tickers = [optimization_config.benchmark_ticker] + backtest_config.benchmark_tickers
+        else:
+            benchmark_tickers = backtest_config.benchmark_tickers
+            
         benchmark_data = download_benchmark_data(
-            backtest_config.benchmark_tickers,
-            backtest_config.start_date,
+            benchmark_tickers,
+            "2009-07-01",  # Extra buffer for optimization
             backtest_config.end_date
         )
         print(f"Downloaded benchmark data for {len(benchmark_data)} benchmarks")
+        
+        # Merge benchmark data with main price data for CLEIR
+        if optimization_config.benchmark_ticker and optimization_config.benchmark_ticker in benchmark_data:
+            # Add benchmark to price data
+            benchmark_prices = benchmark_data[optimization_config.benchmark_ticker]
+            price_data.prices[optimization_config.benchmark_ticker] = benchmark_prices.reindex(price_data.dates)
+            # Also add dummy volume data for the benchmark (benchmarks typically don't have volume)
+            price_data.volumes[optimization_config.benchmark_ticker] = pd.Series(0, index=price_data.dates)
+            price_data.tickers = price_data.tickers + [optimization_config.benchmark_ticker]
+            print(f"Added {optimization_config.benchmark_ticker} to price data for CLEIR tracking")
         
     except Exception as e:
         print(f"Error downloading benchmark data: {e}")
@@ -137,7 +162,18 @@ def main():
     
     try:
         # Initialize backtester
-        backtester = CVaRIndexBacktest(price_data, optimization_config)
+        if optimization_config.sparsity_bound is not None:
+            # CLEIR mode: pass asset tickers separately
+            backtester = CVaRIndexBacktest(
+                price_data, 
+                optimization_config,
+                asset_tickers=selected_universe  # Don't include benchmark in assets
+            )
+            print("Running CLEIR (CVaR-LASSO Enhanced Index Replication)")
+        else:
+            # Standard CVaR mode
+            backtester = CVaRIndexBacktest(price_data, optimization_config)
+            print("Running standard CVaR optimization")
         
         # Run backtest
         cvar_results = backtester.run_backtest(backtest_config)

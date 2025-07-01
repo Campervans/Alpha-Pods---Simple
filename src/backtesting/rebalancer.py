@@ -141,10 +141,12 @@ def create_rebalance_event(date: pd.Timestamp,
 def apply_transaction_costs_to_returns(portfolio_return: float,
                                       transaction_cost: float) -> float:
     """
-    Apply transaction costs to portfolio return.
+    [DEPRECATED] Apply transaction costs to portfolio return.
     
-    Transaction costs are subtracted from the portfolio return
-    in the period when rebalancing occurs.
+    This function is deprecated. Transaction costs should be applied
+    directly to portfolio value using: value_post = value_pre * (1 - cost)
+    
+    Kept for backward compatibility only.
     
     Args:
         portfolio_return: Gross portfolio return for the period
@@ -152,12 +154,6 @@ def apply_transaction_costs_to_returns(portfolio_return: float,
         
     Returns:
         Net portfolio return after transaction costs
-        
-    Example:
-        >>> gross_return = 0.02  # 2% gross return
-        >>> cost = 0.001  # 0.1% transaction cost
-        >>> net_return = apply_transaction_costs_to_returns(gross_return, cost)
-        >>> net_return  # Should be 0.019 (1.9%)
     """
     return portfolio_return - transaction_cost
 

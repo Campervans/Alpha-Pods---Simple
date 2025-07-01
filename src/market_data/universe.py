@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 from ..utils.schemas import PriceData, UniverseConfig
-from .downloader import download_universe, create_sp100_list
+from .downloader import download_universe, create_sp100_list, create_sp100_since_2010
 
 
 def calculate_liquidity_scores(price_data: PriceData, config: UniverseConfig) -> pd.Series:

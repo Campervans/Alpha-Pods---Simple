@@ -7,10 +7,95 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import os
 import warnings
+import random
+import requests
 warnings.filterwarnings('ignore')
 
 # Set random seed for reproducibility
 np.random.seed(42)
+
+# PROXY CONFIGURATION - CREDENTIALS ARE INTENTIONALLY HARDCODED, DO NOT CHANGE
+PROXY_USERNAME = 'sp7lr99xhd'
+PROXY_PASSWORD = '7Xtywa2k3o0oxoViLX'
+
+# Add path to import from src
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Load proxy ports from CSV - now supports 100 proxies instead of hardcoded 30
+from src.utils.proxy_utils import load_proxies_from_csv
+PROXY_PORTS = load_proxies_from_csv()
+
+
+def get_random_proxy():
+    """Get a random proxy from the list."""
+    port = random.choice(PROXY_PORTS)
+    proxy = f"http://{PROXY_USERNAME}:{PROXY_PASSWORD}@dc.decodo.com:{port}"
+    return {
+        'http': proxy,
+        'https': proxy
+    }
+
+
+def download_with_proxy_retry(ticker, start, end, max_proxy_attempts=3):
+    """Download ticker data with proxy retry logic."""
+    # Save original proxy environment variables
+    original_http_proxy = os.environ.get('HTTP_PROXY', '')
+    original_https_proxy = os.environ.get('HTTPS_PROXY', '')
+    
+    for proxy_attempt in range(max_proxy_attempts + 1):  # +1 for no-proxy attempt
+        try:
+            if proxy_attempt < max_proxy_attempts:
+                # Try with a proxy
+                proxy_dict = get_random_proxy()
+                proxy_url = proxy_dict['http']
+                
+                # Set environment variables for proxy
+                os.environ['HTTP_PROXY'] = proxy_url
+                os.environ['HTTPS_PROXY'] = proxy_url
+                os.environ['http_proxy'] = proxy_url  # Some systems use lowercase
+                os.environ['https_proxy'] = proxy_url
+                
+                stock_data = yf.download(ticker, start=start, end=end, 
+                                       auto_adjust=True, progress=False)
+                if not stock_data.empty:
+                    print(f"✓ {ticker} downloaded using proxy port {proxy_url.split(':')[-1]}")
+                    # Restore original proxy settings
+                    os.environ['HTTP_PROXY'] = original_http_proxy
+                    os.environ['HTTPS_PROXY'] = original_https_proxy
+                    os.environ['http_proxy'] = original_http_proxy
+                    os.environ['https_proxy'] = original_https_proxy
+                    return stock_data
+            else:
+                # Last attempt without proxy - clear proxy env vars
+                os.environ['HTTP_PROXY'] = ''
+                os.environ['HTTPS_PROXY'] = ''
+                os.environ['http_proxy'] = ''
+                os.environ['https_proxy'] = ''
+                
+                stock_data = yf.download(ticker, start=start, end=end, 
+                                       auto_adjust=True, progress=False)
+                if not stock_data.empty:
+                    # Restore original proxy settings
+                    os.environ['HTTP_PROXY'] = original_http_proxy
+                    os.environ['HTTPS_PROXY'] = original_https_proxy
+                    os.environ['http_proxy'] = original_http_proxy
+                    os.environ['https_proxy'] = original_https_proxy
+                    return stock_data
+        except Exception as e:
+            if proxy_attempt < max_proxy_attempts:
+                print(f"Proxy attempt {proxy_attempt + 1} failed for {ticker}, trying another...")
+            else:
+                print(f"All download attempts failed for {ticker}: {e}")
+    
+    # Restore original proxy settings before returning
+    os.environ['HTTP_PROXY'] = original_http_proxy
+    os.environ['HTTPS_PROXY'] = original_https_proxy
+    os.environ['http_proxy'] = original_http_proxy
+    os.environ['https_proxy'] = original_https_proxy
+    
+    return pd.DataFrame()
+
 
 def download_sp100_data():
     # grab sp100 stocks for backtest
@@ -31,8 +116,7 @@ def download_sp100_data():
     
     for ticker in tickers:
         try:
-            stock_data = yf.download(ticker, start='2009-07-01', end='2024-12-31', 
-                                   auto_adjust=True, progress=False)
+            stock_data = download_with_proxy_retry(ticker, '2009-07-01', '2024-12-31')
             if len(stock_data) > 1000:  # need enough data
                 data[ticker] = stock_data['Close']
                 successful_downloads += 1
@@ -229,15 +313,17 @@ def create_benchmark_indices(price_data):
     
     # get SPY for cap weight bench
     try:
-        spy_data = yf.download('SPY', start=backtest_start, end=backtest_end, 
-                              auto_adjust=True, progress=False)
-        spy_returns = spy_data['Close'].pct_change().dropna()
-        
-        # align dates
-        spy_aligned = spy_returns.reindex(returns.index, method='ffill').fillna(0)
-        cap_weight_index = (1 + spy_aligned).cumprod() * 100
-        
-        print("✅ Got SPY")
+        spy_data = download_with_proxy_retry('SPY', backtest_start, backtest_end)
+        if not spy_data.empty:
+            spy_returns = spy_data['Close'].pct_change().dropna()
+            
+            # align dates
+            spy_aligned = spy_returns.reindex(returns.index, method='ffill').fillna(0)
+            cap_weight_index = (1 + spy_aligned).cumprod() * 100
+            
+            print("✅ Got SPY")
+        else:
+            raise ValueError("SPY download returned empty data")
     except:
         print("⚠️  SPY download failed, making fake cap weight")
         # simulate cap weight

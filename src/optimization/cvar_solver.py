@@ -6,9 +6,13 @@ import pandas as pd
 from typing import Tuple, Optional, Dict, Any
 import time
 import warnings
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.console import Console
 
 from ..utils.schemas import OptimizationConfig
 from .risk_models import calculate_portfolio_returns, calculate_historical_cvar
+
+console = Console()
 
 
 def create_cvar_problem(returns: np.ndarray, 
@@ -60,7 +64,18 @@ def solve_cvar(returns: np.ndarray,
         raise ValueError("No assets to optimize")
     
     # create problem
-    problem, weights_var, alpha_var, z_var = create_cvar_problem(returns, config)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+        disable=not verbose
+    ) as progress:
+        setup_task = progress.add_task("[cyan]Setting up CVaR problem...", total=1)
+        problem, weights_var, alpha_var, z_var = create_cvar_problem(returns, config)
+        progress.update(setup_task, completed=1)
     
     # track solver info
     solver_info = {
@@ -80,81 +95,110 @@ def solve_cvar(returns: np.ndarray,
     
     start_time = time.time()
     
-    for solver_name in solvers_to_try:
-        try:
-            if verbose:
-                print(f"Trying {solver_name}...")
-            
-            # solver options
-            solver_options = config.solver_options.copy()
-            
-            if solver_name == 'ECOS':
-                solver_options.setdefault('max_iters', 100)
-                solver_options.setdefault('abstol', 1e-7)
-                solver_options.setdefault('reltol', 1e-7)
-            elif solver_name == 'SCS':
-                solver_options.setdefault('max_iters', 5000)
-                solver_options.setdefault('eps', 1e-5)
-            elif solver_name == 'OSQP':
-                solver_options.setdefault('max_iter', 4000)
-                solver_options.setdefault('eps_abs', 1e-6)
-                solver_options.setdefault('eps_rel', 1e-6)
-            # clarabel usually works well with defaults
-            
-            # solve it
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")  # shh
-                
-                problem.solve(
-                    solver=getattr(cp, solver_name),
-                    verbose=verbose,
-                    **solver_options
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+        disable=not verbose
+    ) as progress:
+        solver_task = progress.add_task(
+            f"[yellow]Trying {len(solvers_to_try)} solvers...", 
+            total=len(solvers_to_try)
+        )
+        
+        for i, solver_name in enumerate(solvers_to_try):
+            try:
+                progress.update(
+                    solver_task, 
+                    description=f"[yellow]Trying {solver_name} solver..."
                 )
-            
-            # check if worked
-            if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:
-                solve_time = time.time() - start_time
                 
-                optimal_weights = weights_var.value
+                # solver options
+                solver_options = config.solver_options.copy()
                 
-                if optimal_weights is None:
-                    continue
+                if solver_name == 'ECOS':
+                    solver_options.setdefault('max_iters', 100)
+                    solver_options.setdefault('abstol', 1e-7)
+                    solver_options.setdefault('reltol', 1e-7)
+                elif solver_name == 'SCS':
+                    solver_options.setdefault('max_iters', 5000)
+                    solver_options.setdefault('eps', 1e-5)
+                elif solver_name == 'OSQP':
+                    solver_options.setdefault('max_iter', 4000)
+                    solver_options.setdefault('eps_abs', 1e-6)
+                    solver_options.setdefault('eps_rel', 1e-6)
+                # clarabel usually works well with defaults
                 
-                # validate
-                if not _validate_solution(optimal_weights, config):
+                # solve it
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")  # shh
+                    
+                    if hasattr(cp, solver_name):
+                        solver = getattr(cp, solver_name)
+                    else:
+                        progress.update(solver_task, advance=1)
+                        continue
+                    
+                    problem.solve(
+                        solver=solver,
+                        verbose=False,  # Suppress solver output when using rich
+                        **solver_options
+                    )
+                
+                # check if worked
+                if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE]:
+                    solve_time = time.time() - start_time
+                    
+                    optimal_weights = weights_var.value
+                    
+                    if optimal_weights is None:
+                        progress.update(solver_task, advance=1)
+                        continue
+                    
+                    # validate
+                    if not _validate_solution(optimal_weights, config):
+                        progress.update(solver_task, advance=1)
+                        continue
+                    
+                    # Apply precision management to weights
+                    from ..utils.precision import normalize_weights
+                    optimal_weights = normalize_weights(optimal_weights)
+                    
+                    # update info
+                    solver_info.update({
+                        'status': problem.status,
+                        'solver_used': solver_name,
+                        'solve_time': solve_time,
+                        'objective_value': problem.value,
+                        'solver_stats': problem.solver_stats if hasattr(problem, 'solver_stats') else {}
+                    })
+                    
+                    progress.update(solver_task, completed=len(solvers_to_try))
+                    
                     if verbose:
-                        print(f"Bad solution from {solver_name}")
-                    continue
+                        console.print(f"[green]✓ {solver_name} succeeded![/green]")
+                        console.print(f"  Objective: {problem.value:.6f}")
+                        console.print(f"  Time: {solve_time:.3f}s")
+                    
+                    return optimal_weights, solver_info
                 
-                # update info
-                solver_info.update({
-                    'status': problem.status,
-                    'solver_used': solver_name,
-                    'solve_time': solve_time,
-                    'objective_value': problem.value,
-                    'solver_stats': problem.solver_stats if hasattr(problem, 'solver_stats') else {}
-                })
-                
-                if verbose:
-                    print(f"Solver {solver_name} worked!")
-                    print(f"Obj: {problem.value:.6f}")
-                    print(f"Time: {solve_time:.3f}s")
-                
-                return optimal_weights, solver_info
-            
-            else:
-                if verbose:
-                    print(f"{solver_name} failed: {problem.status}")
-                
-        except Exception as e:
-            if verbose:
-                print(f"Error w/ {solver_name}: {e}")
-            continue
+                else:
+                    progress.update(solver_task, advance=1)
+                    
+            except Exception as e:
+                progress.update(solver_task, advance=1)
+                continue
     
     # all failed - use equal weights
-    print("X All solvers failed! Using equal weights...")
+    if verbose:
+        console.print("[red]All solvers failed! Using equal weights as fallback.[/red]")
+    
+    from ..utils.precision import normalize_weights
     n_assets = returns.shape[1]
-    fallback_weights = np.ones(n_assets) / n_assets
+    fallback_weights = normalize_weights(np.ones(n_assets) / n_assets)
     
     solver_info.update({
         'status': 'FALLBACK_EQUAL_WEIGHTS',
