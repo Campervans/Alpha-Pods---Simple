@@ -216,3 +216,6 @@ __marimo__/
 
 # Ignore results folder
 results/
+
+# Ignore scripts folder
+scripts/
