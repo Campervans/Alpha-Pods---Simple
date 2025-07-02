@@ -5,7 +5,7 @@ This module defines structured data containers with built-in validation
 to ensure data quality and provide clear contracts between components.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from typing import Optional, List, Dict, Any
 import pandas as pd
 import numpy as np
@@ -19,21 +19,44 @@ class PriceData:
     
     This class ensures that price data is properly formatted and complete
     before being used in downstream calculations.
-    """
-    tickers: List[str]
-    dates: pd.DatetimeIndex
-    prices: pd.DataFrame  # dates x tickers
-    volumes: Optional[pd.DataFrame] = None  # dates x tickers
     
-    def __post_init__(self):
+    Notes
+    -----
+    Historically the `PriceData` constructor required an explicit
+    `dates` argument.  Newer call-sites—including the project tests—pass
+    `start_date` and `end_date` instead.  To remain backward compatible
+    while supporting the new signature we now make `dates` optional and
+    accept optional `start_date` / `end_date` keywords.  When `dates`
+    is not supplied we derive it from the provided `prices` index.
+    """
+
+    tickers: List[str]
+    prices: pd.DataFrame  # dates x tickers
+    dates: Optional[pd.DatetimeIndex] = None
+    volumes: Optional[pd.DataFrame] = None  # dates x tickers
+    # Accept start/end date only for constructor signature compatibility.
+    start_date: InitVar[Optional[pd.Timestamp]] = None
+    end_date: InitVar[Optional[pd.Timestamp]] = None
+    
+    def __post_init__(self, start_date: Optional[pd.Timestamp], end_date: Optional[pd.Timestamp]):
         """Validate data consistency after initialization."""
-        # Check dimensions
+        # ------------------------------------------------------------------
+        # Handle missing `dates` – derive from the DataFrame index.  This is
+        # particularly important for the unit-tests which construct
+        # `PriceData` without explicitly passing a `dates` argument.
+        # ------------------------------------------------------------------
+        if self.dates is None:
+            self.dates = self.prices.index
+
+        # ------------------------------------------------------------------
+        # Basic dimensionality checks
+        # ------------------------------------------------------------------
         if len(self.tickers) != self.prices.shape[1]:
             raise ValueError(
                 f"Number of tickers ({len(self.tickers)}) doesn't match "
                 f"price data columns ({self.prices.shape[1]})"
             )
-        
+
         if len(self.dates) != self.prices.shape[0]:
             raise ValueError(
                 f"Number of dates ({len(self.dates)}) doesn't match "
@@ -65,9 +88,35 @@ class PriceData:
         
         # Ensure dates match index
         if not all(self.prices.index == self.dates):
-            self.prices.index = self.dates
-            if self.volumes is not None:
-                self.volumes.index = self.dates
+            # Try to align index to `dates` if possible otherwise fall back
+            # to the DataFrame's current index.
+            if len(self.prices.index) == len(self.dates):
+                self.prices.index = self.dates
+                if self.volumes is not None:
+                    self.volumes.index = self.dates
+
+        # ------------------------------------------------------------------
+        # Validate optional `start_date` / `end_date` if they were provided.
+        # The `PriceData` class also defines read-only *property* accessors
+        # named `start_date` / `end_date`.  When the constructor is invoked
+        # *without* explicitly passing these InitVar arguments the dataclass
+        # machinery may pass the *property* objects themselves as the
+        # default.  We therefore normalise such cases to `None`.
+        # ------------------------------------------------------------------
+        if isinstance(start_date, property):
+            start_date = None
+        if isinstance(end_date, property):
+            end_date = None
+
+        if start_date is not None and start_date != self.dates[0]:
+            raise ValueError(
+                "start_date argument does not match first date in prices index"
+            )
+
+        if end_date is not None and end_date != self.dates[-1]:
+            raise ValueError(
+                "end_date argument does not match last date in prices index"
+            )
     
     @property
     def n_assets(self) -> int:

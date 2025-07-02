@@ -443,4 +443,29 @@ def validate_universe_selection(tickers: List[str],
     print(f"  Max weight (equal): {validation_results['max_weight_equal']:.1%}")
     print(f"  Validation passed: {validation_results['validation_passed']}")
     
-    return validation_results 
+    return validation_results
+
+
+def get_ml_universe() -> List[str]:
+    """Get the 60-stock universe for ML-enhanced strategies.
+    
+    These are the 60 most liquid stocks from S&P 100 that have
+    consistent data availability from 2010-2024. This universe
+    is used for both Task A and Task B to ensure consistency.
+    
+    Returns:
+        List of 60 ticker symbols
+        
+    Note:
+        This list was curated based on liquidity and data availability
+        analysis performed in the baseline implementation.
+    """
+    # Remember: Keep it simple - this is the same universe used across the project
+    return [
+        'AAPL', 'ABBV', 'ACN', 'ADBE', 'ADI', 'ADP', 'AMGN', 'AMZN', 'APH', 'AVGO',
+        'AXP', 'BAC', 'BKNG', 'BLK', 'BRK-B', 'CAT', 'CMCSA', 'COST', 'CRM', 'CVX',
+        'DIS', 'EMR', 'GE', 'GILD', 'GOOGL', 'HD', 'HUM', 'JNJ', 'JPM', 'KLAC',
+        'KO', 'LIN', 'LLY', 'LRCX', 'MA', 'MDLZ', 'META', 'MO', 'MSFT', 'NEE',
+        'NKE', 'NVDA', 'ORCL', 'PEP', 'PFE', 'PG', 'RTX', 'SBUX', 'SLB', 'SPGI',
+        'SYK', 'TMO', 'TSLA', 'TXN', 'UNH', 'USB', 'V', 'VZ', 'WMT', 'XOM'
+    ] 

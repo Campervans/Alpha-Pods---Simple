@@ -26,14 +26,14 @@ class MLCLEIROptimizer(AlphaEnhancedBacktest):
     optimization_config : Optional[OptimizationConfig], default None
         Custom optimization configuration. If *None*, the default
         configuration from ``AlphaEnhancedBacktest`` is used.
-    top_k : int, default 30
+    top_k : int, default 60
         Number of top-ranked stocks (by predicted alpha) to include in
-        each quarterly rebalance.
+        each quarterly rebalance. Changed from 30 to use full universe.
     """
 
     def __init__(self,
                  optimization_config: Optional[OptimizationConfig] = None,
-                 top_k: int = 30):
+                 top_k: int = 60):
         super().__init__(optimization_config=optimization_config, top_k=top_k)
 
     # Explicitly expose run() just for type checkers / clarity (delegates)

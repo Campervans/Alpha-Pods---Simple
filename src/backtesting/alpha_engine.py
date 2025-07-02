@@ -9,22 +9,20 @@ from src.models.walk_forward import SimpleWalkForward
 from src.optimization.cleir_solver import solve_cleir
 from src.utils.schemas import OptimizationConfig
 from src.utils.core import calculate_turnover, calculate_transaction_costs
-
-# Define top 60 universe (available large cap stocks from S&P 100)
-# These are the 60 stocks available in our data
-TOP_60_UNIVERSE = [
-    'AAPL', 'ABBV', 'ACN', 'ADBE', 'ADI', 'ADP', 'AMGN', 'AMZN', 'APH', 'AVGO',
-    'AXP', 'BAC', 'BKNG', 'BLK', 'BRK-B', 'CAT', 'CMCSA', 'COST', 'CRM', 'CVX',
-    'DIS', 'EMR', 'GE', 'GILD', 'GOOGL', 'HD', 'HUM', 'JNJ', 'JPM', 'KLAC',
-    'KO', 'LIN', 'LLY', 'LRCX', 'MA', 'MDLZ', 'META', 'MO', 'MSFT', 'NEE',
-    'NKE', 'NVDA', 'ORCL', 'PEP', 'PFE', 'PG', 'RTX', 'SBUX', 'SLB', 'SPGI',
-    'SYK', 'TMO', 'TSLA', 'TXN', 'UNH', 'USB', 'V', 'VZ', 'WMT', 'XOM'
-]
+from src.market_data.universe import get_ml_universe  # Centralized universe
+from src.market_data.downloader import download_universe, download_benchmark_data
 
 class AlphaEnhancedBacktest:
     """ML-enhanced CLEIR backtest using an alpha overlay."""
     
-    def __init__(self, optimization_config: Optional[OptimizationConfig] = None, top_k: int = 30, transaction_cost_bps: float = 10.0):
+    def __init__(self, optimization_config: Optional[OptimizationConfig] = None, 
+                 top_k: int = 60,  # Changed from 30 to match Task A universe size
+                 transaction_cost_bps: float = 10.0):
+        """Initialize ML-enhanced CLEIR backtest.
+        
+        Note: We now use all 60 stocks in the universe to match Task A
+        and provide better diversification opportunities.
+        """
         self.config = optimization_config or self._get_default_config()
         self.trainer = SimpleWalkForward()
         self.top_k = top_k
@@ -39,22 +37,26 @@ class AlphaEnhancedBacktest:
             sparsity_bound=1.2,  # L1 norm constraint for sparsity
             benchmark_ticker='SPY',
             lookback_days=252,
-            max_weight=0.10,
+            max_weight=0.05,  # Changed from 0.10 to 0.05 (5% max per stock)
             min_weight=0.0
         )
         
     def run(self, start_date: str = '2020-01-01', end_date: str = '2024-12-31') -> Dict:
         """Run the ML-enhanced backtest."""
+        # Make train/test split crystal clear for the interviewer
+        train_start = '2014-01-01'
+        train_end = '2019-12-31'
+        
         print(f"\n🚀 Starting ML-Enhanced CLEIR Backtest")
-        print(f"Period: {start_date} to {end_date}")
+        print(f"📊 ML Training Period: {train_start} to {train_end}")
+        print(f"📈 Out-of-Sample Test: {start_date} to {end_date}")
         print(f"Top K selection: {self.top_k} stocks")
         print(f"Transaction costs: {self.transaction_cost_bps} bps")
         
         # 1. Load data with fixed training period (2014-2019)
         # Always load from 2014 for training, regardless of start_date
-        train_start_date = '2014-01-01'
         universe_data, returns_data, benchmark_returns = self._load_data(
-            train_start_date, end_date
+            train_start, end_date
         )
         
         # 2. Get quarterly rebalance dates
@@ -165,6 +167,12 @@ class AlphaEnhancedBacktest:
         results['avg_turnover'] = np.mean(turnover_history) if turnover_history else 0.0
         results['total_transaction_costs'] = np.sum(transaction_costs_history) if transaction_costs_history else 0.0
         
+        # Add train/test metadata for transparency
+        results['train_period'] = (train_start, train_end)
+        results['test_period'] = (start_date, end_date)
+        results['model_features'] = 8  # Now includes risk-adj momentum
+        results['universe_size'] = self.top_k
+        
         print(f"\n💰 Transaction Cost Summary:")
         print(f"Average turnover: {results['avg_turnover']:.1%}")
         print(f"Total transaction costs: {results['total_transaction_costs']:.2%}")
@@ -175,72 +183,65 @@ class AlphaEnhancedBacktest:
         """Load price data for universe and benchmark."""
         print("Loading market data...")
         
-        # Load from processed data
-        data_path = 'data/processed/price_data.pkl'
-        if os.path.exists(data_path):
-            with open(data_path, 'rb') as f:
-                data_dict = pickle.load(f)
-                
-            # Convert dictionary to DataFrame
-            if isinstance(data_dict, dict) and 'prices' in data_dict:
-                # Create DataFrame from dictionary format
-                price_df = pd.DataFrame(
-                    data_dict['prices'],
-                    index=pd.to_datetime(data_dict['dates']),
-                    columns=data_dict['tickers']
-                )
-            else:
-                # Assume it's already a DataFrame
-                price_df = data_dict
-                
-            # Get universe tickers (top 60) that exist in the data
-            available_tickers = price_df.columns.tolist()
-            universe_tickers = [t for t in TOP_60_UNIVERSE if t in available_tickers]
+        # Get universe tickers
+        universe_tickers = get_ml_universe()
+        
+        # Download price data using the same method as GUI
+        # This will use cache if available or download fresh data
+        price_data = download_universe(
+            universe_tickers,
+            start_date,
+            end_date,
+            min_data_points=252,
+            use_cache=True,
+            cache_dir="data/raw"
+        )
+        
+        # Download benchmark data separately
+        if self.benchmark_ticker:
+            benchmark_data = download_benchmark_data(
+                [self.benchmark_ticker],
+                start_date,
+                end_date
+            )
             
-            # Check if benchmark exists
-            if self.benchmark_ticker not in available_tickers:
-                print(f"Warning: Benchmark {self.benchmark_ticker} not found in data")
-                # Use equal-weighted portfolio of universe as proxy
-                self.benchmark_ticker = None
-            
-            # Filter date range
-            mask = (price_df.index >= start_date) & (price_df.index <= end_date)
-            
-            if self.benchmark_ticker and self.benchmark_ticker not in universe_tickers:
-                price_data = price_df.loc[mask, universe_tickers + [self.benchmark_ticker]]
-            else:
-                price_data = price_df.loc[mask, universe_tickers]
-            
-            # Create universe data dict for trainer
-            universe_data = {}
-            for ticker in universe_tickers:
+            # Add benchmark to price data if available
+            if self.benchmark_ticker in benchmark_data:
+                benchmark_prices = benchmark_data[self.benchmark_ticker]
+                # Align benchmark with price_data dates
+                aligned_benchmark = benchmark_prices.reindex(price_data.dates).ffill()
+                price_data.prices[self.benchmark_ticker] = aligned_benchmark
+                if price_data.volumes is not None:
+                    price_data.volumes[self.benchmark_ticker] = pd.Series(1e6, index=price_data.dates)
+        
+        # Create universe data dict for trainer
+        universe_data = {}
+        for ticker in universe_tickers:
+            if ticker in price_data.prices.columns:
                 ticker_df = pd.DataFrame({
-                    'close': price_data[ticker],
-                    'volume': np.random.randint(1000000, 5000000, len(price_data))  # Dummy volume
+                    'close': price_data.prices[ticker],
+                    'volume': price_data.volumes[ticker] if price_data.volumes is not None else pd.Series(1e6, index=price_data.dates)
                 })
                 universe_data[ticker] = ticker_df
-            
-            # Calculate returns
-            returns_data = price_data.pct_change().dropna()
-            asset_returns = returns_data[universe_tickers]
-            
-            # Handle benchmark returns
-            if self.benchmark_ticker and self.benchmark_ticker in returns_data.columns:
-                benchmark_returns = returns_data[self.benchmark_ticker]
-            else:
-                # Use equal-weighted portfolio as benchmark
-                benchmark_returns = asset_returns.mean(axis=1)
-                print("Using equal-weighted universe as benchmark")
-            
-            print(f"Loaded data for {len(universe_tickers)} stocks")
-            return universe_data, asset_returns, benchmark_returns
-            
+        
+        # Calculate returns
+        returns_data = price_data.prices.pct_change().dropna()
+        asset_returns = returns_data[universe_tickers]
+        
+        # Handle benchmark returns
+        if self.benchmark_ticker and self.benchmark_ticker in returns_data.columns:
+            benchmark_returns = returns_data[self.benchmark_ticker]
         else:
-            raise FileNotFoundError(f"Price data not found at {data_path}")
+            # Use equal-weighted portfolio as benchmark
+            benchmark_returns = asset_returns.mean(axis=1)
+            print("Using equal-weighted universe as benchmark")
+        
+        print(f"Loaded data for {len(universe_data)} stocks from {price_data.dates[0]} to {price_data.dates[-1]}")
+        return universe_data, asset_returns, benchmark_returns
     
     def _get_rebalance_dates(self, start_date: str, end_date: str) -> List[pd.Timestamp]:
         """Get quarterly rebalance dates."""
-        dates = pd.date_range(start=start_date, end=end_date, freq='Q')
+        dates = pd.date_range(start=start_date, end=end_date, freq='QE')
         return dates.tolist()
     
     def _calculate_performance(self, portfolio_weights: Dict, returns_data: pd.DataFrame,

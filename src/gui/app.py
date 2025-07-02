@@ -62,7 +62,7 @@ class CVaRGUI:
         options = [
             "TASK A - Run CLEIR Optimization",
             "TASK A - Run CVaR Optimization",
-            "TASK B - Run Alpha Overlay Enhancement",
+            "TASK B - ML-Enhanced CLEIR (60 stocks, 2014-2019 training)",
             "TASK A&B - View Results",
             "Data Management",
             "About",
@@ -215,8 +215,10 @@ class CVaRGUI:
         info_text = Text()
         info_text.append("This feature enhances the CLEIR optimization with machine learning:\n\n", style="bold")
         info_text.append("• Uses Ridge regression to predict 3-month returns\n")
-        info_text.append("• Features: momentum, volatility, volume, and RSI indicators\n")
-        info_text.append("• Selects top 30 stocks based on alpha predictions\n")
+        info_text.append("• Features: momentum, volatility, volume, RSI, and risk-adjusted momentum\n")
+        info_text.append("• Selects top 60 stocks based on alpha predictions (expanded from 30)\n")
+        info_text.append("• Training: 2014-2019 (fixed window)\n")
+        info_text.append("• Testing: 2020-2024 (out-of-sample)\n")
         info_text.append("• Applies CLEIR optimization to the selected universe\n")
         info_text.append("• Walk-forward training prevents look-ahead bias\n")
         
@@ -227,7 +229,7 @@ class CVaRGUI:
         config = {
             'start_date': get_text_input("Start date", default="2020-01-01"),
             'end_date': get_text_input("End date", default="2024-12-31"),
-            'top_k': int(get_text_input("Number of stocks to select", default="30")),
+            'top_k': int(get_text_input("Number of stocks to select", default="60")),
             'train_years': int(get_text_input("Training window (years)", default="3")),
             'rebalance_freq': get_text_input("Rebalance frequency", default="quarterly")
         }
@@ -429,7 +431,7 @@ class CVaRGUI:
         
         about_text.append("\nTask B Requirements:\n", style="bold")
         about_text.append("• ML Enhancement: Ridge regression with technical features\n")
-        about_text.append("• Alpha Overlay: Select top 30 stocks based on predictions\n")
+        about_text.append("• Alpha Overlay: Select top 60 stocks based on predictions\n")
         about_text.append("• Walk-Forward: 3-year training window, no look-ahead bias\n")
         about_text.append("• Interpretability: Feature importance visualization\n")
         

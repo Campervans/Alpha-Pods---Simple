@@ -60,12 +60,13 @@ def test_create_simple_features():
     features = create_simple_features(prices, volumes)
     
     # Check output
-    assert features.shape[1] == 7  # Should have 7 features
+    assert features.shape[1] == 8  # Was 7, now 8 with risk-adj momentum
     assert features.shape[0] == len(prices)  # Same number of rows
     
     # Check feature names
     expected_features = ['return_1m', 'return_3m', 'return_6m', 
-                        'volatility_1m', 'volatility_3m', 'volume_ratio', 'rsi']
+                        'volatility_1m', 'volatility_3m', 'volume_ratio', 
+                        'rsi', 'risk_adj_momentum_6m']  # Added new feature
     assert all(feat in features.columns for feat in expected_features)
     
     # Check no NaN values after initial period
@@ -139,7 +140,7 @@ def test_ml_pipeline_integration():
     
     # Test feature creation
     features = create_simple_features(prices, volumes)
-    assert features.shape[1] == 7
+    assert features.shape[1] == 8  # Now expecting 8 features
     
     # Test model training (on subset)
     train_features = features.iloc[200:800].dropna()
