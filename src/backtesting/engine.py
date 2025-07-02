@@ -7,13 +7,20 @@ import time
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn, TaskProgressColumn
 from rich.console import Console
 
-from ..utils.schemas import PriceData, OptimizationConfig, BacktestConfig, BacktestResults, RebalanceEvent
-from ..optimization.cvar_solver import solve_cvar
+from src.utils.schemas import (
+    PriceData,
+    OptimizationConfig,
+    BacktestConfig,
+    BacktestResults,
+    RebalanceEvent,
+)
+from src.optimization.cvar_solver import solve_cvar
 from .rebalancer import (
     calculate_drift_adjusted_weights, 
     create_rebalance_event,
     get_rebalancing_dates
 )
+from src.utils.precision import round_index_values, round_returns, round_weights
 
 console = Console()
 
@@ -132,11 +139,11 @@ class CVaRIndexBacktest:
                 
                 self.rebalance_events.append(rebalance_event)
                 
-                # Apply transaction costs directly to portfolio value
-                # Cost formula: IndexValue_post = IndexValue_pre * (1 - transaction_cost)
-                # Where transaction_cost = turnover * 10bps (0.001)
-                # Only apply costs if this is not the first rebalancing (no initial trades)
-                if len(index_values) > 0 and prev_rebal_date is not None:
+                # Apply costs to the portfolio value *at* the rebalance date.
+                # Even the first rebalance incurs trading to establish the
+                # target weights, so we apply costs unconditionally when an
+                # index value is available.
+                if len(index_values) > 0:
                     index_values[-1] *= (1 - rebalance_event.transaction_cost)
                 
                 # update weights
@@ -162,7 +169,6 @@ class CVaRIndexBacktest:
             portfolio_dates.extend(period_dates[1:])
         
         # create results with proper precision management
-        from ..utils.precision import round_index_values, round_returns, round_weights
         
         index_series = pd.Series(index_values, index=portfolio_dates)
         index_series = round_index_values(index_series)

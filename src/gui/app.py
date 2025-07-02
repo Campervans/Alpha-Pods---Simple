@@ -229,7 +229,7 @@ class CVaRGUI:
         config = {
             'start_date': get_text_input("Start date", default="2020-01-01"),
             'end_date': get_text_input("End date", default="2024-12-31"),
-            'top_k': int(get_text_input("Number of stocks to select", default="30")),
+            'top_k': int(get_text_input("Number of stocks to select", default="60")),
             'train_years': int(get_text_input("Training window (years)", default="3")),
             'rebalance_freq': get_text_input("Rebalance frequency", default="quarterly")
         }
@@ -431,7 +431,7 @@ class CVaRGUI:
         
         about_text.append("\nTask B Requirements:\n", style="bold")
         about_text.append("• ML Enhancement: Ridge regression with technical features\n")
-        about_text.append("• Alpha Overlay: Select top 30 stocks based on predictions\n")
+        about_text.append("• Alpha Overlay: Select top 60 stocks based on predictions\n")
         about_text.append("• Walk-Forward: 3-year training window, no look-ahead bias\n")
         about_text.append("• Interpretability: Feature importance visualization\n")
         

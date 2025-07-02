@@ -10,6 +10,7 @@ from src.optimization.cleir_solver import solve_cleir
 from src.utils.schemas import OptimizationConfig
 from src.utils.core import calculate_turnover, calculate_transaction_costs
 from src.market_data.universe import get_ml_universe  # Centralized universe
+from src.market_data.downloader import download_universe, download_benchmark_data
 
 class AlphaEnhancedBacktest:
     """ML-enhanced CLEIR backtest using an alpha overlay."""
@@ -36,7 +37,7 @@ class AlphaEnhancedBacktest:
             sparsity_bound=1.2,  # L1 norm constraint for sparsity
             benchmark_ticker='SPY',
             lookback_days=252,
-            max_weight=0.10,
+            max_weight=0.05,  # Changed from 0.10 to 0.05 (5% max per stock)
             min_weight=0.0
         )
         
@@ -182,68 +183,61 @@ class AlphaEnhancedBacktest:
         """Load price data for universe and benchmark."""
         print("Loading market data...")
         
-        # Load from processed data
-        data_path = 'data/processed/price_data.pkl'
-        if os.path.exists(data_path):
-            with open(data_path, 'rb') as f:
-                data_dict = pickle.load(f)
-                
-            # Convert dictionary to DataFrame
-            if isinstance(data_dict, dict) and 'prices' in data_dict:
-                # Create DataFrame from dictionary format
-                price_df = pd.DataFrame(
-                    data_dict['prices'],
-                    index=pd.to_datetime(data_dict['dates']),
-                    columns=data_dict['tickers']
-                )
-            else:
-                # Assume it's already a DataFrame
-                price_df = data_dict
-                
-            # Get universe tickers (top 60) that exist in the data
-            available_tickers = price_df.columns.tolist()
-            universe_tickers = [t for t in get_ml_universe() if t in available_tickers]
+        # Get universe tickers
+        universe_tickers = get_ml_universe()
+        
+        # Download price data using the same method as GUI
+        # This will use cache if available or download fresh data
+        price_data = download_universe(
+            universe_tickers,
+            start_date,
+            end_date,
+            min_data_points=252,
+            use_cache=True,
+            cache_dir="data/raw"
+        )
+        
+        # Download benchmark data separately
+        if self.benchmark_ticker:
+            benchmark_data = download_benchmark_data(
+                [self.benchmark_ticker],
+                start_date,
+                end_date
+            )
             
-            # Check if benchmark exists
-            if self.benchmark_ticker not in available_tickers:
-                print(f"Warning: Benchmark {self.benchmark_ticker} not found in data")
-                # Use equal-weighted portfolio of universe as proxy
-                self.benchmark_ticker = None
-            
-            # Filter date range
-            mask = (price_df.index >= start_date) & (price_df.index <= end_date)
-            
-            if self.benchmark_ticker and self.benchmark_ticker not in universe_tickers:
-                price_data = price_df.loc[mask, universe_tickers + [self.benchmark_ticker]]
-            else:
-                price_data = price_df.loc[mask, universe_tickers]
-            
-            # Create universe data dict for trainer
-            universe_data = {}
-            for ticker in universe_tickers:
+            # Add benchmark to price data if available
+            if self.benchmark_ticker in benchmark_data:
+                benchmark_prices = benchmark_data[self.benchmark_ticker]
+                # Align benchmark with price_data dates
+                aligned_benchmark = benchmark_prices.reindex(price_data.dates).ffill()
+                price_data.prices[self.benchmark_ticker] = aligned_benchmark
+                if price_data.volumes is not None:
+                    price_data.volumes[self.benchmark_ticker] = pd.Series(1e6, index=price_data.dates)
+        
+        # Create universe data dict for trainer
+        universe_data = {}
+        for ticker in universe_tickers:
+            if ticker in price_data.prices.columns:
                 ticker_df = pd.DataFrame({
-                    'close': price_data[ticker],
-                    'volume': np.random.randint(1000000, 5000000, len(price_data))  # Dummy volume
+                    'close': price_data.prices[ticker],
+                    'volume': price_data.volumes[ticker] if price_data.volumes is not None else pd.Series(1e6, index=price_data.dates)
                 })
                 universe_data[ticker] = ticker_df
-            
-            # Calculate returns
-            returns_data = price_data.pct_change().dropna()
-            asset_returns = returns_data[universe_tickers]
-            
-            # Handle benchmark returns
-            if self.benchmark_ticker and self.benchmark_ticker in returns_data.columns:
-                benchmark_returns = returns_data[self.benchmark_ticker]
-            else:
-                # Use equal-weighted portfolio as benchmark
-                benchmark_returns = asset_returns.mean(axis=1)
-                print("Using equal-weighted universe as benchmark")
-            
-            print(f"Loaded data for {len(universe_tickers)} stocks")
-            return universe_data, asset_returns, benchmark_returns
-            
+        
+        # Calculate returns
+        returns_data = price_data.prices.pct_change().dropna()
+        asset_returns = returns_data[universe_tickers]
+        
+        # Handle benchmark returns
+        if self.benchmark_ticker and self.benchmark_ticker in returns_data.columns:
+            benchmark_returns = returns_data[self.benchmark_ticker]
         else:
-            raise FileNotFoundError(f"Price data not found at {data_path}")
+            # Use equal-weighted portfolio as benchmark
+            benchmark_returns = asset_returns.mean(axis=1)
+            print("Using equal-weighted universe as benchmark")
+        
+        print(f"Loaded data for {len(universe_data)} stocks from {price_data.dates[0]} to {price_data.dates[-1]}")
+        return universe_data, asset_returns, benchmark_returns
     
     def _get_rebalance_dates(self, start_date: str, end_date: str) -> List[pd.Timestamp]:
         """Get quarterly rebalance dates."""
