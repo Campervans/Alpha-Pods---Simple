@@ -1,10 +1,10 @@
 """
 CVaR-LASSO Enhanced Index Replication (CLEIR) solver.
 
-This module implements the CLEIR optimization problem as a linear program:
-- Minimize CVaR of tracking error (benchmark return - portfolio return)
-- Subject to L1 norm constraint on weights (sparsity)
-- Subject to budget constraint (weights sum to 1)
+implements CLEIR optimization as a linear program:
+- minimize CVaR of tracking error
+- subject to L1 norm constraint on weights (sparsity)
+- subject to budget constraint (weights sum to 1)
 """
 
 import cvxpy as cp
@@ -29,12 +29,12 @@ def create_cleir_problem(
     Create the CLEIR linear programming problem.
     
     Args:
-        asset_returns: Historical asset returns (n_periods x n_assets)
-        benchmark_returns: Historical benchmark returns (n_periods,)
-        config: Optimization configuration with sparsity_bound
+        asset_returns: historical asset returns (n_periods x n_assets)
+        benchmark_returns: historical benchmark returns (n_periods,)
+        config: optimization config with sparsity_bound
         
     Returns:
-        Tuple of (problem, weights, zeta, z, u)
+        (problem, weights, zeta, z, u)
     """
     n_periods, n_assets = asset_returns.shape
     
@@ -44,46 +44,46 @@ def create_cleir_problem(
             f"number of periods ({n_periods})"
         )
     
-    # Decision variables
-    w = cp.Variable(n_assets, name="weights")  # Portfolio weights
+    # decision variables
+    w = cp.Variable(n_assets, name="weights")  # portfolio weights
     zeta = cp.Variable(1, name="zeta")  # VaR threshold
-    z = cp.Variable(n_periods, name="z")  # Auxiliary variables for CVaR
-    u = cp.Variable(n_assets, name="u")  # Auxiliary variables for L1 norm
+    z = cp.Variable(n_periods, name="z")  # auxiliary variables for CVaR
+    u = cp.Variable(n_assets, name="u")  # auxiliary variables for L1 norm
     
-    # Tracking error: portfolio return - benchmark return
-    # We want to minimize downside risk, so we look at negative tracking error
+    # tracking error: portfolio return - benchmark return
+    # we minimize downside risk, so we look at negative tracking error
     portfolio_returns = asset_returns @ w
-    # Use negative tracking error so CVaR captures underperformance
+    # use negative tracking error so CVaR captures underperformance
     tracking_error = benchmark_returns - portfolio_returns
     
-    # CVaR objective: zeta + 1/(n*(1-alpha)) * sum(z)
+    # CVaR objective
     alpha = config.confidence_level
     cvar_objective = zeta + (1.0 / (n_periods * (1 - alpha))) * cp.sum(z)
     
-    # Constraints
+    # constraints
     constraints = [
         # CVaR constraints
-        z >= tracking_error - zeta,  # z_t >= Y_t - sum(w_i*R_it) - zeta
+        z >= tracking_error - zeta,
         z >= 0,
         
         # L1 norm linearization: u_i >= |w_i|
         u >= w,
         u >= -w,
         
-        # Sparsity constraint: sum(|w_i|) <= s
+        # sparsity constraint: sum(|w_i|) <= s
         cp.sum(u) <= config.sparsity_bound,
         
-        # Budget constraint: sum(w_i) = 1
+        # budget constraint: sum(w_i) = 1
         cp.sum(w) == 1.0,
     ]
     
-    # Add weight bounds if specified
-    # Always enforce non-negativity for long-only portfolios
+    # add weight bounds if specified
+    # always enforce non-negativity for long-only
     constraints.append(w >= config.min_weight)
     if config.max_weight < 1:
         constraints.append(w <= config.max_weight)
     
-    # Create optimization problem
+    # create optimization problem
     objective = cp.Minimize(cvar_objective)
     problem = cp.Problem(objective, constraints)
     
@@ -100,24 +100,24 @@ def solve_cleir(
     Solve the CLEIR optimization problem.
     
     Args:
-        asset_returns: Historical asset returns (n_periods x n_assets)
-        benchmark_returns: Historical benchmark returns (n_periods,)
-        config: Optimization configuration
-        verbose: Whether to print solver output
+        asset_returns: historical asset returns (n_periods x n_assets)
+        benchmark_returns: historical benchmark returns (n_periods,)
+        config: optimization config
+        verbose: whether to print solver output
         
     Returns:
-        Tuple of (optimal_weights, solver_info)
+        (optimal_weights, solver_info)
     """
     if asset_returns.shape[0] < 10:
-        raise ValueError("Need at least 10 observations for optimization")
+        raise ValueError("Need at least 10 observations")
     
     if asset_returns.shape[1] == 0:
         raise ValueError("No assets to optimize")
     
     if config.sparsity_bound is None:
-        raise ValueError("CLEIR requires sparsity_bound to be set")
+        raise ValueError("CLEIR requires sparsity_bound")
     
-    # Create the optimization problem
+    # create the optimization problem
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -133,7 +133,7 @@ def solve_cleir(
         )
         progress.update(setup_task, completed=1)
     
-    # Solver info tracking
+    # solver info tracking
     solver_info = {
         'status': 'UNKNOWN',
         'solver_used': None,
@@ -141,14 +141,14 @@ def solve_cleir(
         'objective_value': np.inf,
         'n_iterations': 0,
         'solver_stats': {},
-        'sparsity': 0,  # Number of non-zero weights
-        'l1_norm': 0.0,  # Actual L1 norm of solution
+        'sparsity': 0,  # number of non-zero weights
+        'l1_norm': 0.0,  # actual L1 norm of solution
     }
     
-    # Try different solvers in order of preference
+    # try different solvers
     solvers_to_try = ['ECOS_BB', 'ECOS', 'SCS', 'CLARABEL']
     if config.solver in solvers_to_try:
-        # Put user's choice first
+        # put user's choice first
         solvers_to_try = [config.solver] + [s for s in solvers_to_try if s != config.solver]
     
     start_time = time.time()
@@ -174,7 +174,7 @@ def solve_cleir(
                     description=f"[yellow]Trying {solver_name} solver..."
                 )
                 
-                # Solver-specific options
+                # solver-specific options
                 solver_options = config.solver_options.copy()
                 
                 if solver_name == 'ECOS_BB':
@@ -195,7 +195,7 @@ def solve_cleir(
                     solver_options.setdefault('tol_feas', 1e-7)
                     solver_options.setdefault('tol_gap_abs', 1e-7)
                 
-                # Solve the problem
+                # solve the problem
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     
@@ -207,11 +207,11 @@ def solve_cleir(
                     
                     problem.solve(
                         solver=solver,
-                        verbose=False,  # Suppress solver output when using rich
+                        verbose=False,
                         **solver_options
                     )
                 
-                # Check if solution is valid
+                # check if solution is valid
                 if problem.status in ['optimal', 'optimal_inaccurate']:
                     optimal_weights = w_var.value
                     
@@ -219,25 +219,25 @@ def solve_cleir(
                         progress.update(solver_task, advance=1)
                         continue
                     
-                    # Apply precision management to weights
+                    # apply precision management to weights
                     from ..utils.precision import normalize_weights
                     optimal_weights = normalize_weights(optimal_weights)
                     
-                    # Check for negative weights after normalization
+                    # check for negative weights
                     if np.any(optimal_weights < 0):
-                        console.print(f"[orange]WARNING: Negative weights detected after optimization![/orange]")
+                        console.print(f"[orange]WARNING: Negative weights detected![/orange]")
                         console.print(f"Min weight: {np.min(optimal_weights)}")
                         console.print(f"Negative weights at indices: {np.where(optimal_weights < 0)[0]}")
-                        # Force to zero and renormalize
+                        # force to zero and renormalize
                         optimal_weights = np.maximum(optimal_weights, 0.0)
                         optimal_weights = normalize_weights(optimal_weights)
                     
-                    # Calculate sparsity metrics
+                    # calculate sparsity metrics
                     sparsity_threshold = 1e-6
                     n_nonzero = np.sum(np.abs(optimal_weights) > sparsity_threshold)
                     l1_norm = np.sum(np.abs(optimal_weights))
                     
-                    # Update solver info
+                    # update solver info
                     solver_info.update({
                         'status': problem.status,
                         'solver_used': solver_name,
@@ -266,14 +266,14 @@ def solve_cleir(
                 progress.update(solver_task, advance=1)
                 continue
     
-    # All solvers failed
+    # all solvers failed
     solver_info['status'] = 'FAILED'
     solver_info['solve_time'] = time.time() - start_time
     
     if verbose:
         console.print("[red]All solvers failed! Using equal weights as fallback.[/red]")
     
-    # Return equal weights as fallback
+    # return equal weights as fallback
     from ..utils.precision import normalize_weights
     n_assets = asset_returns.shape[1]
     equal_weights = normalize_weights(np.ones(n_assets) / n_assets)
@@ -281,7 +281,7 @@ def solve_cleir(
     return equal_weights, solver_info
 
 
-# Backward compatibility wrapper
+# b/c wrapper
 def solve_cvar_with_tracking(
     asset_returns: np.ndarray,
     benchmark_returns: np.ndarray,
@@ -291,12 +291,12 @@ def solve_cvar_with_tracking(
     """
     Solve CVaR optimization with tracking error (wrapper for CLEIR).
     
-    This is a compatibility wrapper that calls CLEIR with a high sparsity bound
+    compatibility wrapper that calls CLEIR with a high sparsity bound
     to effectively remove the sparsity constraint.
     """
-    # Create a modified config with high sparsity bound
+    # create a modified config with high sparsity bound
     import copy
     cleir_config = copy.deepcopy(config)
-    cleir_config.sparsity_bound = 2.0  # High enough to not bind
+    cleir_config.sparsity_bound = 2.0
     
     return solve_cleir(asset_returns, benchmark_returns, cleir_config, verbose) 

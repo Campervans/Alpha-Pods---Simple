@@ -1,8 +1,8 @@
 """
-Parallel feature engineering implementation for Alpha Enhancement.
+Parallel feature engineering for Alpha Enhancement.
 
-This module provides parallelized versions of feature engineering functions
-to speed up processing of large datasets.
+this module has parallel versions of feature engineering functions
+to speed up processing big datasets.
 """
 
 import numpy as np
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class ParallelFeatureEngine:
-    """Parallel implementation of feature engineering."""
+    """Parallel feature engineering."""
     
     def __init__(
         self,
@@ -29,14 +29,14 @@ class ParallelFeatureEngine:
         parallel_config: Optional[ParallelConfig] = None
     ):
         """
-        Initialize parallel feature engine.
+        init parallel feature engine.
         
         Parameters
         ----------
         feature_engine : AlphaFeatureEngine
-            Base feature engine to parallelize
+            base feature engine to parallelize
         parallel_config : ParallelConfig, optional
-            Parallel processing configuration
+            parallel processing config
         """
         self.feature_engine = feature_engine
         self.config = parallel_config or ParallelConfig(enabled=False)
@@ -55,20 +55,20 @@ class ParallelFeatureEngine:
         Parameters
         ----------
         date_batch : List[pd.Timestamp]
-            Batch of dates to process
+            batch of dates to process
         prices_df : pd.DataFrame
-            Price data
+            price data
         volumes_df : pd.DataFrame
-            Volume data
+            volume data
         fundamentals_df : pd.DataFrame, optional
-            Fundamental data
+            fundamental data
         market_indicators_df : pd.DataFrame, optional
-            Market indicators data
+            market indicators data
             
         Returns
         -------
         pd.DataFrame
-            Features for all dates in batch
+            features for all dates in batch
         """
         batch_features = []
         
@@ -107,63 +107,63 @@ class ParallelFeatureEngine:
         Parameters
         ----------
         dates : List[pd.Timestamp]
-            List of dates to process
+            list of dates to process
         prices_df : pd.DataFrame
-            Price data
+            price data
         volumes_df : pd.DataFrame
-            Volume data
+            volume data
         fundamentals_df : pd.DataFrame, optional
-            Fundamental data
+            fundamental data
         market_indicators_df : pd.DataFrame, optional
-            Market indicators data
+            market indicators data
         show_progress : bool
-            Whether to show progress bar
+            whether to show progress bar
             
         Returns
         -------
         pd.DataFrame
-            Features for all dates
+            features for all dates
         """
         if not self.config.enabled or len(dates) < 10:
-            # Fall back to sequential processing for small datasets
+            # fallback to sequential for small datasets
             logger.info("Using sequential processing")
             return self._create_features_sequential(
                 dates, prices_df, volumes_df, fundamentals_df, market_indicators_df, show_progress
             )
         
-        # Determine chunk size
+        # determine chunk size
         if self.config.chunk_size:
             chunk_size = self.config.chunk_size
         else:
-            # Auto-determine chunk size based on data size and workers
+            # auto-determine chunk size
             chunk_size = max(10, len(dates) // (self.config.n_workers * 4))
-            chunk_size = min(chunk_size, 200)  # Cap at 200 dates per chunk
+            chunk_size = min(chunk_size, 200)  # cap at 200 dates per chunk
         
         logger.info(
             f"Using parallel processing with {self.config.n_workers} workers, "
             f"chunk size: {chunk_size}"
         )
         
-        # Split dates into chunks
+        # split dates into chunks
         date_chunks = [
             dates[i:i + chunk_size] 
             for i in range(0, len(dates), chunk_size)
         ]
         
-        # Process chunks in parallel
+        # process chunks in parallel
         if self.config.backend == 'loky' or self.config.backend == 'multiprocessing':
             results = self._parallel_joblib(
                 date_chunks, prices_df, volumes_df, fundamentals_df, 
                 market_indicators_df, show_progress
             )
         else:
-            # Threading backend
+            # threading backend
             results = self._parallel_threading(
                 date_chunks, prices_df, volumes_df, fundamentals_df,
                 market_indicators_df, show_progress
             )
         
-        # Combine results
+        # combine results
         if results:
             return pd.concat(results, ignore_index=True)
         else:
@@ -178,7 +178,7 @@ class ParallelFeatureEngine:
         market_indicators_df: Optional[pd.DataFrame],
         show_progress: bool
     ) -> pd.DataFrame:
-        """Sequential feature creation with progress bar."""
+        """sequential feature creation with progress bar."""
         all_features = []
         
         iterator = tqdm(dates, desc="Creating features") if show_progress else dates
@@ -212,12 +212,12 @@ class ParallelFeatureEngine:
         market_indicators_df: Optional[pd.DataFrame],
         show_progress: bool
     ) -> List[pd.DataFrame]:
-        """Process chunks using joblib."""
+        """process chunks using joblib."""
         from joblib import parallel_backend
         
         with parallel_backend(self.config.backend, n_jobs=self.config.n_workers):
             if show_progress:
-                # Use tqdm with joblib
+                # use tqdm with joblib
                 results = Parallel(n_jobs=self.config.n_workers)(
                     delayed(self.create_features_batch)(
                         chunk, prices_df, volumes_df, fundamentals_df, market_indicators_df
@@ -243,11 +243,11 @@ class ParallelFeatureEngine:
         market_indicators_df: Optional[pd.DataFrame],
         show_progress: bool
     ) -> List[pd.DataFrame]:
-        """Process chunks using threading (for I/O bound operations)."""
+        """process chunks using threading (for I/O bound stuff)."""
         results = []
         
         with ProcessPoolExecutor(max_workers=self.config.n_workers) as executor:
-            # Submit all tasks
+            # submit all tasks
             future_to_chunk = {
                 executor.submit(
                     self.create_features_batch,
@@ -256,7 +256,7 @@ class ParallelFeatureEngine:
                 for chunk in date_chunks
             }
             
-            # Process completed tasks
+            # process completed tasks
             if show_progress:
                 iterator = tqdm(
                     as_completed(future_to_chunk),
@@ -290,30 +290,30 @@ def optimize_feature_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Optimized DataFrame
+        optimized DataFrame
     """
     initial_memory = df.memory_usage(deep=True).sum() / 1024**2
     
-    # Optimize numeric columns
+    # optimize numeric columns
     for col in df.select_dtypes(include=['float64']).columns:
-        # Check if we can use float32
+        # check if we can use float32
         col_min = df[col].min()
         col_max = df[col].max()
         
         if pd.isna(col_min) or pd.isna(col_max):
             continue
             
-        # Float32 range: ±3.4e38
+        # float32 range: ±3.4e38
         if abs(col_min) < 3.4e38 and abs(col_max) < 3.4e38:
             df[col] = df[col].astype('float32')
     
-    # Optimize integer columns
+    # optimize integer columns
     for col in df.select_dtypes(include=['int64']).columns:
         col_min = df[col].min()
         col_max = df[col].max()
         
         if col_min >= 0:
-            # Unsigned integers
+            # unsigned ints
             if col_max < 255:
                 df[col] = df[col].astype('uint8')
             elif col_max < 65535:
@@ -321,7 +321,7 @@ def optimize_feature_dtypes(df: pd.DataFrame) -> pd.DataFrame:
             elif col_max < 4294967295:
                 df[col] = df[col].astype('uint32')
         else:
-            # Signed integers
+            # signed ints
             if col_min > -128 and col_max < 127:
                 df[col] = df[col].astype('int8')
             elif col_min > -32768 and col_max < 32767:
@@ -329,7 +329,8 @@ def optimize_feature_dtypes(df: pd.DataFrame) -> pd.DataFrame:
             elif col_min > -2147483648 and col_max < 2147483647:
                 df[col] = df[col].astype('int32')
     
-    # Convert object columns to category if appropriate
+    # convert object columns to category if it makes sense
+    # TODO: this is a simple heuristic, could be improved
     for col in df.select_dtypes(include=['object']).columns:
         num_unique_values = len(df[col].unique())
         num_total_values = len(df[col])
@@ -344,4 +345,4 @@ def optimize_feature_dtypes(df: pd.DataFrame) -> pd.DataFrame:
         f"({memory_reduction:.1f}% reduction)"
     )
     
-    return df 
+    return df

@@ -25,7 +25,7 @@ from src.utils.precision import round_index_values, round_returns, round_weights
 console = Console()
 
 class CVaRIndexBacktest:
-    # runs the backtest simulation
+    # runs the backtest
     
     def __init__(self, price_data: PriceData, optimization_config: OptimizationConfig, 
                  asset_tickers: Optional[List[str]] = None, show_optimization_progress: bool = False):
@@ -35,12 +35,12 @@ class CVaRIndexBacktest:
         self.rebalance_events: List[RebalanceEvent] = []
         self.show_optimization_progress = show_optimization_progress
         
-        # For CLEIR: separate assets from benchmark
+        # for CLEIR: separate assets from benchmark
         if asset_tickers is not None:
             self.asset_tickers = asset_tickers
             self.is_cleir = optimization_config.sparsity_bound is not None
         else:
-            # Legacy mode: all tickers are assets
+            # legacy mode: all tickers are assets
             self.asset_tickers = price_data.tickers
             self.is_cleir = False
         
@@ -63,10 +63,10 @@ class CVaRIndexBacktest:
             config.rebalance_frequency
         )
         
-        console.print(f"[green]{len(rebalance_dates)} rebalances to perform[/green]")
+        console.print(f"[green]{len(rebalance_dates)} rebalances to do[/green]")
         
         # init portfolio
-        index_values = [100.0]  # Always start at 100.0
+        index_values = [100.0]  # always start at 100
         n_assets = len(self.asset_tickers)
         current_weights = np.ones(n_assets) / n_assets  # equal weight start
         weights_history = []
@@ -98,20 +98,20 @@ class CVaRIndexBacktest:
                 # calc perf since last rebal
                 if prev_rebal_date is not None:
                     asset_returns = backtest_returns[self.asset_tickers]
-                    # Get the last known index value to ensure continuity
+                    # get the last known index value to ensure continuity
                     last_known_value = index_values[-1] if index_values else 100.0
                     period_performance = self._calculate_period_performance(
                         current_weights, asset_returns, prev_rebal_date, rebal_date,
                         last_index_value=last_known_value
                     )
                     
-                    # update index vals, excluding the first value which is the previous period's close
+                    # update index vals, skip first val (previous period's close)
                     period_dates, period_values = period_performance
                     if len(period_values) > 1:
                         index_values.extend(period_values[1:])
                         portfolio_dates.extend(period_dates[1:])
                 
-                # drift adjusted weights (important for accurate turnover calcs!)
+                # drift adjusted weights (important for accurate turnover!)
                 if prev_rebal_date is not None:
                     asset_returns = backtest_returns[self.asset_tickers]
                     old_weights = calculate_drift_adjusted_weights(
@@ -139,10 +139,8 @@ class CVaRIndexBacktest:
                 
                 self.rebalance_events.append(rebalance_event)
                 
-                # Apply costs to the portfolio value *at* the rebalance date.
-                # Even the first rebalance incurs trading to establish the
-                # target weights, so we apply costs unconditionally when an
-                # index value is available.
+                # apply costs to portfolio value at rebal date
+                # first rebal still incurs costs to setup weights
                 if len(index_values) > 0:
                     index_values[-1] *= (1 - rebalance_event.transaction_cost)
                 
@@ -168,12 +166,12 @@ class CVaRIndexBacktest:
             index_values.extend(period_values[1:])
             portfolio_dates.extend(period_dates[1:])
         
-        # create results with proper precision management
+        # create results w proper precision
         
         index_series = pd.Series(index_values, index=portfolio_dates)
         index_series = round_index_values(index_series)
         
-        # Ensure index starts at exactly 100.0
+        # make sure index starts at exactly 100
         if len(index_series) > 0:
             index_series.iloc[0] = 100.0
         
@@ -183,7 +181,7 @@ class CVaRIndexBacktest:
         weights_df = pd.DataFrame(weights_history)
         weights_df.set_index('date', inplace=True)
         
-        # Round all weight columns
+        # round all weight columns
         for col in weights_df.columns:
             if col != 'date':
                 weights_df[col] = round_weights(weights_df[col])
@@ -223,7 +221,7 @@ class CVaRIndexBacktest:
             equal_weights = np.ones(n_assets) / n_assets
             return equal_weights, {'status': 'INSUFFICIENT_DATA'}
         
-        # Get benchmark returns if in CLEIR mode
+        # get benchmark returns if in CLEIR mode
         hist_benchmark_returns = None
         if self.is_cleir and self.optimization_config.benchmark_ticker:
             if self.optimization_config.benchmark_ticker in returns.columns:
@@ -232,27 +230,27 @@ class CVaRIndexBacktest:
                     benchmark_returns.to_frame(), rebal_date
                 ).flatten()
             else:
-                console.print(f"[orange]Warning: Benchmark {self.optimization_config.benchmark_ticker} not found in data[/orange]")
+                console.print(f"[orange]Warning: Benchmark {self.optimization_config.benchmark_ticker} not found[/orange]")
         
         # run optimization
         try:
             start_time = time.time()
             
             if self.is_cleir and hist_benchmark_returns is not None:
-                # Import CLEIR solver (to be created)
+                # import CLEIR solver
                 from ..optimization.cleir_solver import solve_cleir
                 optimal_weights, solver_info = solve_cleir(
                     hist_asset_returns, 
                     hist_benchmark_returns,
                     self.optimization_config,
-                    verbose=self.show_optimization_progress  # Use the flag
+                    verbose=self.show_optimization_progress
                 )
             else:
-                # Standard CVaR optimization
+                # standard CVaR
                 optimal_weights, solver_info = solve_cvar(
                     hist_asset_returns, 
                     self.optimization_config,
-                    verbose=self.show_optimization_progress  # Use the flag
+                    verbose=self.show_optimization_progress
                 )
             
             solve_time = time.time() - start_time
@@ -268,7 +266,7 @@ class CVaRIndexBacktest:
     
     def _get_optimization_returns(self, returns: pd.DataFrame, 
                                  rebal_date: pd.Timestamp) -> np.ndarray:
-        # get historical returns for opt
+        # get historical returns for optimization
         try:
             end_loc = returns.index.get_loc(rebal_date)
         except KeyError:
@@ -288,7 +286,7 @@ class CVaRIndexBacktest:
                                      start_date: pd.Timestamp,
                                      end_date: pd.Timestamp,
                                      last_index_value: float = 100.0) -> tuple[List, List]:
-        # calc portfolio perf over period
+        # calculate portfolio performance over a period
         try:
             period_returns = returns.loc[start_date:end_date]
         except KeyError:
@@ -297,20 +295,20 @@ class CVaRIndexBacktest:
         if len(period_returns) == 0:
             return [start_date, end_date], [last_index_value, last_index_value]
         
-        # daily port returns
+        # daily portfolio returns
         portfolio_returns = np.dot(period_returns.values, weights)
         
         # cumulative
         cumulative_values = np.cumprod(1 + portfolio_returns)
         
-        # Prepend starting value, scaled by the last known index value
+        # prepend starting value, scaled by last known index value
         all_values = np.concatenate([[last_index_value], last_index_value * cumulative_values])
         all_dates = [start_date] + period_returns.index.tolist()
         
         return all_dates, all_values.tolist()
     
     def get_rebalancing_summary(self) -> pd.DataFrame:
-        # get rebal summary df
+        # get rebalancing summary as a dataframe
         if not self.rebalance_events:
             return pd.DataFrame()
         
@@ -346,4 +344,4 @@ class CVaRIndexBacktest:
             'mean_transaction_cost': np.mean(costs)
         }
 
-# might add more analytics here later...
+# TODO: add more analytics here later...

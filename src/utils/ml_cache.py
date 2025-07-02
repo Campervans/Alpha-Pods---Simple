@@ -1,8 +1,8 @@
 """
 ML Training Cache System.
 
-Provides caching functionality for ML training results to avoid
-recomputing expensive operations.
+provides caching for ML training results to avoid
+recomputing expensive stuff.
 """
 
 import os
@@ -19,18 +19,18 @@ from pathlib import Path
 class MLTrainingCache:
     """
     Cache for ML training results including:
-    - Trained models
-    - Feature engineering results
-    - Predictions
-    - Model metrics
+    - trained models
+    - feature engineering results
+    - predictions
+    - model metrics
     """
     
     def __init__(self, cache_dir: str = "cache/ml_training"):
-        """Initialize ML cache."""
+        """init ML cache."""
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
-        # Sub-directories for different cache types
+        # sub-directories for different cache types
         self.models_dir = self.cache_dir / "models"
         self.features_dir = self.cache_dir / "features"
         self.predictions_dir = self.cache_dir / "predictions"
@@ -44,18 +44,18 @@ class MLTrainingCache:
     
     def get_cache_key(self, params: Dict[str, Any]) -> str:
         """
-        Generate unique cache key from parameters.
+        Generate unique cache key from params.
         
         Args:
-            params: Dictionary of parameters
+            params: dict of parameters
             
         Returns:
-            Unique hash key
+            unique hash key
         """
-        # Convert params to stable string representation
+        # convert params to stable string
         param_str = json.dumps(params, sort_keys=True, default=str)
         
-        # Generate hash
+        # generate hash
         return hashlib.sha256(param_str.encode()).hexdigest()[:16]
     
     def save_features(self, 
@@ -67,15 +67,15 @@ class MLTrainingCache:
         Save engineered features to cache.
         
         Args:
-            features: Feature DataFrame
-            date_range: (start_date, end_date) tuple
-            feature_params: Parameters used for feature engineering
-            feature_set: Name of feature set used
+            features: feature DataFrame
+            date_range: (start, end) tuple
+            feature_params: params for feature engineering
+            feature_set: name of feature set
             
         Returns:
-            Cache key
+            cache key
         """
-        # Create cache key
+        # create cache key
         cache_params = {
             'type': 'features',
             'date_range': date_range,
@@ -85,11 +85,11 @@ class MLTrainingCache:
         }
         cache_key = self.get_cache_key(cache_params)
         
-        # Save features
+        # save features
         features_path = self.features_dir / f"{cache_key}.pkl"
         features.to_pickle(features_path)
         
-        # Save metadata
+        # save metadata
         meta_path = self.features_dir / f"{cache_key}_meta.json"
         with open(meta_path, 'w') as f:
             json.dump(cache_params, f, indent=2, default=str)
@@ -102,12 +102,12 @@ class MLTrainingCache:
                      feature_params: Dict[str, Any],
                      feature_set: str) -> Optional[pd.DataFrame]:
         """
-        Load features from cache if available.
+        Load features from cache.
         
         Returns:
-            Cached features or None if not found
+            cached features or None
         """
-        # Create cache key
+        # create cache key
         cache_params = {
             'type': 'features',
             'date_range': date_range,
@@ -115,18 +115,18 @@ class MLTrainingCache:
             'feature_set': feature_set
         }
         
-        # Look for matching cache
+        # look for matching cache
         for meta_file in self.features_dir.glob("*_meta.json"):
             with open(meta_file, 'r') as f:
                 meta = json.load(f)
             
-            # Check if parameters match (ignoring shape)
+            # check if params match (ignoring shape)
             meta_check = meta.copy()
             meta_check.pop('shape', None)
             cache_check = cache_params.copy()
             
             if meta_check == cache_check:
-                # Load features
+                # load features
                 cache_key = meta_file.stem.replace('_meta', '')
                 features_path = self.features_dir / f"{cache_key}.pkl"
                 
@@ -146,15 +146,15 @@ class MLTrainingCache:
         Save trained model to cache.
         
         Args:
-            model: Trained model
-            train_date: Training date
-            train_params: Training parameters
-            metrics: Model performance metrics
+            model: trained model
+            train_date: training date
+            train_params: training parameters
+            metrics: model performance metrics
             
         Returns:
-            Cache key
+            cache key
         """
-        # Create cache key
+        # create cache key
         cache_params = {
             'type': 'model',
             'train_date': str(train_date),
@@ -163,7 +163,7 @@ class MLTrainingCache:
         }
         cache_key = self.get_cache_key(cache_params)
         
-        # Save model
+        # save model
         model_path = self.models_dir / f"{cache_key}.pkl"
         with open(model_path, 'wb') as f:
             pickle.dump({
@@ -172,7 +172,7 @@ class MLTrainingCache:
                 'metrics': metrics
             }, f)
         
-        # Save metadata
+        # save metadata
         meta_path = self.models_dir / f"{cache_key}_meta.json"
         with open(meta_path, 'w') as f:
             json.dump(cache_params, f, indent=2, default=str)
@@ -183,12 +183,12 @@ class MLTrainingCache:
                   train_date: pd.Timestamp,
                   train_params: Dict[str, Any]) -> Optional[Tuple[Any, Dict[str, float]]]:
         """
-        Load model from cache if available.
+        Load model from cache.
         
         Returns:
-            Tuple of (model, metrics) or None if not found
+            (model, metrics) or None
         """
-        # Look for matching model
+        # look for matching model
         target_params = {
             'type': 'model',
             'train_date': str(train_date),
@@ -199,11 +199,11 @@ class MLTrainingCache:
             with open(meta_file, 'r') as f:
                 meta = json.load(f)
             
-            # Check if parameters match (ignoring metrics)
+            # check if params match (ignoring metrics)
             meta_check = {k: v for k, v in meta.items() if k != 'metrics'}
             
             if meta_check == target_params:
-                # Load model
+                # load model
                 cache_key = meta_file.stem.replace('_meta', '')
                 model_path = self.models_dir / f"{cache_key}.pkl"
                 
@@ -231,11 +231,11 @@ class MLTrainingCache:
         }
         cache_key = self.get_cache_key(cache_params)
         
-        # Save predictions
+        # save predictions
         pred_path = self.predictions_dir / f"{cache_key}.pkl"
         predictions.to_pickle(pred_path)
         
-        # Save metadata
+        # save metadata
         meta_path = self.predictions_dir / f"{cache_key}_meta.json"
         with open(meta_path, 'w') as f:
             json.dump(cache_params, f, indent=2, default=str)
@@ -247,7 +247,7 @@ class MLTrainingCache:
                         date_range: Tuple[str, str],
                         model_params: Dict[str, Any]) -> Optional[pd.DataFrame]:
         """
-        Load predictions from cache if available.
+        Load predictions from cache.
         """
         target_params = {
             'type': 'predictions',
@@ -259,11 +259,11 @@ class MLTrainingCache:
             with open(meta_file, 'r') as f:
                 meta = json.load(f)
             
-            # Check if parameters match (ignoring shape)
+            # check if params match (ignoring shape)
             meta_check = {k: v for k, v in meta.items() if k != 'shape'}
             
             if meta_check == target_params:
-                # Load predictions
+                # load predictions
                 cache_key = meta_file.stem.replace('_meta', '')
                 pred_path = self.predictions_dir / f"{cache_key}.pkl"
                 
@@ -279,8 +279,8 @@ class MLTrainingCache:
         Clear cache files.
         
         Args:
-            cache_type: Type to clear ('models', 'features', 'predictions', 'metrics')
-                       If None, clears all caches
+            cache_type: type to clear ('models', 'features', etc)
+                       if None, clears all
         """
         if cache_type:
             target_dir = self.cache_dir / cache_type
@@ -289,7 +289,7 @@ class MLTrainingCache:
                     file.unlink()
                 print(f"🗑️ Cleared {cache_type} cache")
         else:
-            # Clear all caches
+            # clear all caches
             for subdir in [self.models_dir, self.features_dir, 
                           self.predictions_dir, self.metrics_dir]:
                 for file in subdir.glob("*"):
@@ -298,10 +298,10 @@ class MLTrainingCache:
     
     def get_cache_info(self) -> Dict[str, Any]:
         """
-        Get information about cached items.
+        Get info about cached items.
         
         Returns:
-            Dictionary with cache statistics
+            dict with cache stats
         """
         info = {
             'cache_dir': str(self.cache_dir),
@@ -312,7 +312,7 @@ class MLTrainingCache:
             'total_size_mb': 0
         }
         
-        # Calculate total size
+        # calculate total size
         for subdir in [self.models_dir, self.features_dir, 
                       self.predictions_dir, self.metrics_dir]:
             for file in subdir.glob("*"):

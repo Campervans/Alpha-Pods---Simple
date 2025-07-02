@@ -1,8 +1,4 @@
-"""Standardized metric extraction for strategy comparison.
-
-This module provides utilities to extract consistent performance metrics
-from different strategy result formats.
-"""
+"""get some metrics for comparing strats"""
 
 import numpy as np
 import pandas as pd
@@ -10,15 +6,15 @@ from typing import Dict, Any, Union
 
 
 def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
-    """Extract standardized metrics from any strategy results.
+    """pulls standard metrics from any strategy result.
     
     Args:
-        results: Strategy results dictionary containing at minimum:
+        results: dict with strategy results, needs one of:
             - 'daily_values' or 'index_values': pd.Series of portfolio values
-            - Optional: 'returns', 'volatility', 'sharpe_ratio', etc.
+            - can also have 'returns', 'volatility', 'sharpe_ratio', etc.
     
     Returns:
-        Dictionary with standardized metrics:
+        dict with the usual metrics:
             - total_return: Total return over period
             - annual_return: Annualized return
             - volatility: Annualized volatility
@@ -29,35 +25,35 @@ def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
     """
     metrics = {}
     
-    # Get daily values series
+    # daily values series
     if 'daily_values' in results:
         daily_values = results['daily_values']
     elif 'index_values' in results:
         daily_values = results['index_values']
     else:
-        raise ValueError("Results must contain 'daily_values' or 'index_values'")
+        raise ValueError("need 'daily_values' or 'index_values' in results")
     
-    # Ensure it's a pandas Series
+    # make sure it's a pandas series
     if isinstance(daily_values, list):
         daily_values = pd.Series(daily_values)
     
-    # Calculate returns if not provided
+    # calc returns if not there
     if 'returns' in results:
         returns = results['returns']
     else:
         returns = daily_values.pct_change().dropna()
     
-    # Total return
+    # total return
     metrics['total_return'] = (daily_values.iloc[-1] / daily_values.iloc[0]) - 1.0
     
-    # Annual return
+    # annual return
     n_days = len(returns)
     if n_days > 0:
         metrics['annual_return'] = (1 + metrics['total_return']) ** (252 / n_days) - 1
     else:
         metrics['annual_return'] = 0.0
     
-    # Volatility
+    # volatility
     if 'volatility' in results:
         metrics['volatility'] = results['volatility']
     elif 'annual_volatility' in results:
@@ -65,7 +61,7 @@ def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
     else:
         metrics['volatility'] = returns.std() * np.sqrt(252)
     
-    # Sharpe ratio
+    # sharpe
     if 'sharpe_ratio' in results:
         metrics['sharpe_ratio'] = results['sharpe_ratio']
     else:
@@ -74,26 +70,26 @@ def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
         else:
             metrics['sharpe_ratio'] = 0.0
     
-    # Max drawdown
+    # max drawdown
     if 'max_drawdown' in results:
-        # Ensure positive value
+        # make it positive
         metrics['max_drawdown'] = abs(results['max_drawdown'])
     else:
-        # Calculate from daily values
+        # calc from daily values
         cumulative = daily_values / daily_values.iloc[0]
         running_max = cumulative.expanding().max()
         drawdown = (cumulative - running_max) / running_max
         metrics['max_drawdown'] = abs(drawdown.min())
     
-    # Turnover
+    # turnover
     if 'avg_turnover' in results:
         metrics['avg_turnover'] = results['avg_turnover']
     elif 'turnover_history' in results and results['turnover_history']:
         metrics['avg_turnover'] = np.mean(results['turnover_history'])
     else:
-        metrics['avg_turnover'] = 0.0  # Default for buy-and-hold
+        metrics['avg_turnover'] = 0.0  # if buy-and-hold
     
-    # Transaction costs
+    # transaction costs
     if 'total_transaction_costs' in results:
         metrics['transaction_costs'] = results['total_transaction_costs']
     elif 'transaction_costs_history' in results and results['transaction_costs_history']:
@@ -101,7 +97,7 @@ def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
     else:
         metrics['transaction_costs'] = 0.0
     
-    # Round all metrics for display
+    # round everything for display
     for key, value in metrics.items():
         if key in ['total_return', 'annual_return', 'volatility', 'max_drawdown', 
                    'avg_turnover', 'transaction_costs']:
@@ -114,33 +110,33 @@ def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
 
 def calculate_relative_metrics(strategy_metrics: Dict[str, float], 
                              benchmark_metrics: Dict[str, float]) -> Dict[str, float]:
-    """Calculate relative performance metrics vs benchmark.
+    """compare strategy to a benchmark.
     
     Args:
-        strategy_metrics: Metrics for the strategy
-        benchmark_metrics: Metrics for the benchmark
+        strategy_metrics: metrics for our strat
+        benchmark_metrics: metrics for the benchmark
     
     Returns:
-        Dictionary with relative metrics:
-            - excess_return: Annual return difference
-            - tracking_error: Volatility of return differences
-            - information_ratio: Excess return / tracking error
-            - relative_drawdown: Difference in max drawdowns
+        dict with relative metrics:
+            - excess_return: annual return diff
+            - tracking_error: vol of return diffs
+            - information_ratio: excess return / tracking error
+            - relative_drawdown: diff in max drawdowns
     """
     relative = {}
     
-    # Excess return
+    # excess return
     relative['excess_return'] = (
         strategy_metrics['annual_return'] - benchmark_metrics['annual_return']
     )
     
-    # For now, approximate tracking error as volatility difference
-    # (proper calculation would need daily return differences)
+    # TODO: this is a dumb way to get tracking error, fix it later
+    # need daily return differences for a proper calculation
     relative['tracking_error'] = abs(
         strategy_metrics['volatility'] - benchmark_metrics['volatility']
     )
     
-    # Information ratio
+    # info ratio
     if relative['tracking_error'] > 0:
         relative['information_ratio'] = (
             relative['excess_return'] / relative['tracking_error']
@@ -148,12 +144,12 @@ def calculate_relative_metrics(strategy_metrics: Dict[str, float],
     else:
         relative['information_ratio'] = 0.0
     
-    # Relative drawdown (positive means strategy had smaller drawdown)
+    # relative drawdown (positive means our strat had a smaller one)
     relative['relative_drawdown'] = (
         benchmark_metrics['max_drawdown'] - strategy_metrics['max_drawdown']
     )
     
-    # Round for display
+    # round for display
     for key, value in relative.items():
         relative[key] = round(value, 4)
     
@@ -161,14 +157,14 @@ def calculate_relative_metrics(strategy_metrics: Dict[str, float],
 
 
 def format_metric_for_display(value: float, metric_type: str) -> str:
-    """Format metric value for display based on type.
+    """make a metric look nice for the GUI
     
     Args:
-        value: Metric value
-        metric_type: Type of metric (e.g., 'return', 'ratio', 'cost')
+        value: the metric value
+        metric_type: type of metric ('return', 'ratio', etc)
     
     Returns:
-        Formatted string for display
+        formatted string
     """
     if metric_type in ['total_return', 'annual_return', 'volatility', 
                        'max_drawdown', 'avg_turnover', 'transaction_costs',
