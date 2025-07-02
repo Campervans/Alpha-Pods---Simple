@@ -211,6 +211,9 @@ __marimo__/
 *.md
 !README.md
 
+# Ignore script.md specifically
+script.md
+
 # Ignore all pickle files (data files)
 *.pkl
 
