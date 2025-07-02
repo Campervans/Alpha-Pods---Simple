@@ -431,25 +431,157 @@ class OptimizationController:
     def _generate_performance_plot(self, index_type: str):
         """Generate performance comparison plot for the given index type."""
         try:
-            # Import the plot generation functions directly
-            from scripts.generate_performance_comparison_plots import load_index_data, create_performance_plot
-            
-            # Load data
-            cvar_df, cleir_df = load_index_data()
-            
-            # Generate plot for the specified index type
             if index_type == 'cvar':
+                # For CVaR, use the simple plot from scripts
+                from scripts.generate_performance_comparison_plots import load_index_data, create_performance_plot
+                
+                # Load data
+                cvar_df, _ = load_index_data()
+                
                 if cvar_df is not None:
                     create_performance_plot(cvar_df, 'CVaR', 'results/cvar_index_performance_analysis.png')
                     console.print(f"[dim]✓ Generated cvar_index_performance_analysis.png[/dim]")
                 else:
                     console.print(f"[yellow]Warning: No CVaR data available to plot[/yellow]")
             else:
-                if cleir_df is not None:
-                    create_performance_plot(cleir_df, 'CLEIR', 'results/cleir_index_performance_analysis.png')
-                    console.print(f"[dim]✓ Generated cleir_index_performance_analysis.png[/dim]")
-                else:
-                    console.print(f"[yellow]Warning: No CLEIR data available to plot[/yellow]")
+                # For CLEIR, we need to create the full comparison plot with SPY and equal-weighted
+                import pandas as pd
+                import matplotlib.pyplot as plt
+                import matplotlib
+                matplotlib.use('Agg')
+                from ..market_data.downloader import download_benchmark_data, create_sp100_since_2010, download_universe
+                from ..market_data.universe import apply_universe_filters, calculate_liquidity_scores
+                from ..utils.schemas import UniverseConfig, PriceData as PriceDataSchema
+                from ..utils.core import annualize_return, calculate_sharpe_ratio, calculate_max_drawdown
+                import numpy as np
+                
+                # Load CLEIR data
+                cleir_df = pd.read_csv('results/cleir_index_gui.csv')
+                cleir_df['Date'] = pd.to_datetime(cleir_df['Date'])
+                # Remove duplicates by keeping last value for each date
+                cleir_df = cleir_df.drop_duplicates(subset='Date', keep='last')
+                cleir_df.set_index('Date', inplace=True)
+                
+                # Get date range
+                start_date = cleir_df.index[0].strftime('%Y-%m-%d')
+                end_date = cleir_df.index[-1].strftime('%Y-%m-%d')
+                
+                # Download SPY data
+                spy_data = download_benchmark_data(['SPY'], start_date, end_date)
+                spy_prices = spy_data['SPY']
+                
+                # Calculate equal-weighted index
+                # Use same universe config as the optimization
+                universe_config = UniverseConfig(
+                    n_stocks=60,
+                    lookback_days=252,
+                    min_trading_days=200,
+                    min_price=5.0,
+                    metric="dollar_volume"
+                )
+                
+                # Get S&P 100 tickers
+                sp100_tickers = create_sp100_since_2010()
+                
+                # Download price data
+                price_data = download_universe(
+                    sp100_tickers, 
+                    start_date, 
+                    end_date,
+                    min_data_points=252,
+                    use_cache=True,
+                    cache_dir="data/raw"
+                )
+                
+                # Apply universe filters
+                valid_tickers, _ = apply_universe_filters(price_data, universe_config)
+                
+                if len(valid_tickers) >= universe_config.n_stocks:
+                    # Calculate liquidity scores
+                    valid_price_data_obj = PriceDataSchema(
+                        tickers=valid_tickers,
+                        dates=price_data.dates,
+                        prices=price_data.prices[valid_tickers],
+                        volumes=price_data.volumes[valid_tickers] if price_data.volumes is not None else None
+                    )
+                    
+                    liquidity_scores = calculate_liquidity_scores(valid_price_data_obj, universe_config)
+                    
+                    # Select top N most liquid tickers
+                    selected_tickers = liquidity_scores.nlargest(universe_config.n_stocks).index.tolist()
+                    
+                    # Calculate equal-weighted returns
+                    selected_prices = price_data.prices[selected_tickers]
+                    stock_returns = selected_prices.pct_change()
+                    equal_weight_portfolio_returns = stock_returns.mean(axis=1)
+                    
+                    # Build equal-weighted index
+                    equal_weight_index = pd.Series(index=selected_prices.index, dtype=float)
+                    equal_weight_index.iloc[0] = 100.0
+                    
+                    for i in range(1, len(equal_weight_index)):
+                        equal_weight_index.iloc[i] = equal_weight_index.iloc[i-1] * (1 + equal_weight_portfolio_returns.iloc[i])
+                
+                # Create the plot with all three lines
+                plt.figure(figsize=(12, 7))
+                
+                # Align all data to common dates
+                common_dates = cleir_df.index.intersection(spy_prices.index)
+                if 'equal_weight_index' in locals():
+                    common_dates = common_dates.intersection(equal_weight_index.index)
+                
+                cleir_aligned = cleir_df.loc[common_dates, 'Index_Value']
+                spy_aligned = spy_prices.loc[common_dates]
+                
+                # CLEIR data is already an index starting at 100, so don't normalize it
+                # SPY needs to be normalized to match CLEIR's base of 100
+                spy_normalized = (spy_aligned / spy_aligned.iloc[0]) * 100.0
+                
+                # Plot CLEIR (already normalized as an index)
+                plt.plot(common_dates, cleir_aligned, label='CLEIR Index', linewidth=2, color='green')
+                
+                # Plot SPY
+                plt.plot(common_dates, spy_normalized, label='S&P 500 (SPY)', linewidth=2, color='blue', alpha=0.7)
+                
+                # Plot equal-weighted if available
+                if 'equal_weight_index' in locals():
+                    equal_weight_aligned = equal_weight_index.loc[common_dates]
+                    # Equal weight index is already normalized to base 100
+                    plt.plot(common_dates, equal_weight_aligned, label='Equal-Weighted', linewidth=2, color='orange', alpha=0.7)
+                
+                # Formatting
+                plt.title('CLEIR Index Performance Comparison', fontsize=16, fontweight='bold')
+                plt.xlabel('Date', fontsize=12)
+                plt.ylabel('Index Value (Base = 100)', fontsize=12)
+                plt.legend(loc='upper left', fontsize=11)
+                plt.grid(True, alpha=0.3)
+                
+                # Format x-axis
+                plt.gcf().autofmt_xdate()
+                
+                # Add statistics box
+                cleir_returns = cleir_aligned.pct_change().dropna()
+                total_return = (cleir_aligned.iloc[-1] / cleir_aligned.iloc[0]) - 1
+                annual_return = annualize_return(total_return, len(cleir_returns), 252)
+                volatility = cleir_returns.std() * np.sqrt(252)
+                sharpe = calculate_sharpe_ratio(cleir_returns, 0.0, 252)
+                
+                stats_text = 'CLEIR Statistics:\n'
+                stats_text += f'Total Return: {total_return:.1%}\n'
+                stats_text += f'Annual Return: {annual_return:.1%}\n'
+                stats_text += f'Annual Volatility: {volatility:.1%}\n'
+                stats_text += f'Sharpe Ratio: {sharpe:.2f}'
+                
+                plt.text(0.02, 0.98, stats_text, transform=plt.gca().transAxes,
+                         verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+                         fontsize=10)
+                
+                # Save the plot
+                plt.tight_layout()
+                plt.savefig('results/cleir_index_performance_analysis.png', dpi=150, bbox_inches='tight')
+                plt.close()
+                
+                console.print(f"[dim]✓ Generated cleir_index_performance_analysis.png with SPY and Equal-Weight benchmarks[/dim]")
                 
         except Exception as e:
             console.print(f"[yellow]Warning: Could not generate performance plot: {str(e)}[/yellow]")

@@ -198,7 +198,9 @@ class CVaRGUI:
                 graph_path = os.path.join("results", "cvar_index_performance_analysis.png")
                 if os.path.exists(graph_path):
                     console.print("\n[bold]📊 Performance Analysis Graph:[/bold]")
-                    console.print(f"[link=file://{graph_path}]{graph_path}[/link]")
+                    # Convert to absolute path for file:// link
+                    abs_graph_path = os.path.abspath(graph_path)
+                    console.print(f"[link=file://{abs_graph_path}]{graph_path}[/link]")
                     console.print("[dim]Click the link above to view the CVaR index vs benchmark comparison graph[/dim]")
                 else:
                     console.print("\n[yellow]Note: Run 'Generate Missing Deliverables' in the Results menu to create performance graphs[/yellow]")
@@ -884,7 +886,9 @@ class CVaRGUI:
                 graph_path = os.path.join("results", "cleir_index_performance_analysis.png")
                 if os.path.exists(graph_path):
                     console.print("\n[bold]📊 Performance Analysis Graph:[/bold]")
-                    console.print(f"[link=file://{graph_path}]{graph_path}[/link]")
+                    # Convert to absolute path for file:// link
+                    abs_graph_path = os.path.abspath(graph_path)
+                    console.print(f"[link=file://{abs_graph_path}]{graph_path}[/link]")
                     console.print("[dim]Click the link above to view the CLEIR index vs benchmark comparison graph[/dim]")
                 else:
                     console.print("\n[yellow]Note: Run 'Generate Missing Deliverables' in the Results menu to create performance graphs[/yellow]")
