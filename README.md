@@ -15,15 +15,11 @@ python3 run_gui.py
     conda activate cvar-index
     ```
 
-2.  **Run the baseline backtest:**
+2.  **Run GUI:**
     ```bash
-    python scripts/generate_final_results.py
+    python run_gui.py
     ```
 
-3.  **Run the ML-enhanced backtest:**
-    ```bash
-    python scripts/run_simple_ml_backtest.py
-    ```
 
 ## Overview
 
