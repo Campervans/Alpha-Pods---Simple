@@ -6,12 +6,15 @@ from src.features.simple_features import create_simple_features
 class SimpleWalkForward:
     """Manages walk-forward training and prediction."""
     
-    def __init__(self, train_years=3, rebalance_freq_days=90, prediction_horizon_days=63):
+    def __init__(self, train_years=3, rebalance_freq_days=90, prediction_horizon_days=63, 
+                 fixed_train_start='2014-01-01', fixed_train_end='2019-12-31'):
         self.train_period = timedelta(days=train_years * 365)
         self.rebalance_freq_days = rebalance_freq_days
         self.prediction_horizon_days = prediction_horizon_days
         self.models = {}  # Stores trained model for each rebalance date
         self.predictions = {} # Stores predictions for each rebalance date
+        self.fixed_train_start = pd.to_datetime(fixed_train_start)
+        self.fixed_train_end = pd.to_datetime(fixed_train_end)
 
     def train_predict_for_all_assets(self, universe_data, rebalance_dates):
         """
@@ -32,8 +35,14 @@ class SimpleWalkForward:
             date_predictions = {}
             
             # Define the training window for this rebalance date
-            train_end = date - timedelta(days=1)
-            train_start = train_end - self.train_period
+            # For dates in 2020 and beyond, use fixed 2014-2019 training period
+            if date >= pd.to_datetime('2020-01-01'):
+                train_start = self.fixed_train_start
+                train_end = self.fixed_train_end
+            else:
+                # For earlier dates (shouldn't happen in our case), use rolling window
+                train_end = date - timedelta(days=1)
+                train_start = train_end - self.train_period
 
             for ticker, data in universe_data.items():
                 try:

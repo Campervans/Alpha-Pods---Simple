@@ -10,6 +10,27 @@ from .risk_models import (
     estimate_covariance_matrix
 )
 
+# Lazy import for MLCLEIROptimizer to avoid circular imports
+def _get_ml_cleir_optimizer():
+    """Lazy loader for MLCLEIROptimizer."""
+    from .ml_cleir_optimizer import MLCLEIROptimizer
+    return MLCLEIROptimizer
+
+# Make it available as an attribute that returns the actual class when accessed
+class _LazyMLCLEIROptimizer:
+    def __new__(cls, *args, **kwargs):
+        # When instantiated, return an instance of the actual class
+        actual_class = _get_ml_cleir_optimizer()
+        return actual_class(*args, **kwargs)
+    
+    def __getattr__(self, name):
+        # For accessing class attributes/methods
+        actual_class = _get_ml_cleir_optimizer()
+        return getattr(actual_class, name)
+
+# This will act as the class itself
+MLCLEIROptimizer = _LazyMLCLEIROptimizer
+
 __all__ = [
     'solve_cvar',
     'create_cvar_problem',
@@ -21,4 +42,5 @@ __all__ = [
     'calculate_historical_var',
     'calculate_expected_shortfall',
     'estimate_covariance_matrix',
+    'MLCLEIROptimizer',
 ]

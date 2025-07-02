@@ -35,6 +35,7 @@ dependencies = [
     "rich>=13.0.0",
     "click>=8.0.0",
     "pyfiglet>=0.8.0",
+    "shap>=0.44.0",
 ]
 
 [project.optional-dependencies]

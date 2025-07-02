@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 import os
 import pandas as pd
+import numpy as np
 from pyfiglet import Figlet
 from rich.style import Style
 from rich.console import Console
@@ -262,45 +263,128 @@ class CVaRGUI:
                     if result.returncode == 0:
                         show_success("ML enhancement completed!")
                         
-                        # Try to load and show results
-                        results_path = Path(__file__).parent.parent.parent / 'results' / 'ml_enhanced_index.csv'
-                        if results_path.exists():
-                            df = pd.read_csv(results_path, index_col=0)
-                            
-                            # Calculate metrics
-                            initial_value = df.iloc[0]
-                            final_value = df.iloc[-1]
-                            total_return = (final_value / initial_value - 1)
-                            
-                            console.print("\n[bold cyan]ML-Enhanced Results:[/bold cyan]")
-                            results_table = Table(show_header=False, box=box.SIMPLE)
-                            results_table.add_column("Metric", style="dim")
-                            results_table.add_column("Value", style="bold green")
-                            
-                            results_table.add_row("Final Index Value", f"{final_value:.2f}")
-                            results_table.add_row("Total Return", f"{total_return:.2%}")
-                            results_table.add_row("Results saved to", "results/ml_enhanced_index.csv")
-                            
-                            console.print(results_table)
-                            
-                            # List generated files
-                            console.print("\n[bold]Generated files:[/bold]")
-                            files = [
-                                "ml_enhanced_index.csv",
-                                "ml_feature_importance.png",
-                                "ml_performance_comparison.png",
-                                "ml_predictions_analysis.png",
-                                "ml_method_note.md"
-                            ]
-                            for file in files:
-                                file_path = Path(__file__).parent.parent.parent / 'results' / file
-                                if file_path.exists():
-                                    console.print(f"  ✓ {file}")
+                        # Import display utilities
+                        from src.gui.results_display import (
+                            create_performance_comparison_table,
+                            calculate_spy_metrics
+                        )
                         
-                        # Show output from script
+                        # Try to load ML metrics from JSON first
+                        ml_metrics = {}
+                        json_path = Path(__file__).parent.parent.parent / 'results' / 'ml_metrics.json'
+                        
+                        if json_path.exists():
+                            try:
+                                with open(json_path, 'r') as f:
+                                    metrics_data = json.load(f)
+                                    ml_metrics = metrics_data.get('ml_metrics', {})
+                            except Exception as e:
+                                print(f"Error loading JSON metrics: {e}")
+                        
+                        # Fallback to parsing stdout if JSON not available
+                        if not ml_metrics:
+                            output_lines = result.stdout.split('\n')
+                            
+                            # Look for ML-Enhanced Performance Summary section
+                            in_ml_section = False
+                            for i, line in enumerate(output_lines):
+                                if "ML-Enhanced Performance Summary" in line:
+                                    in_ml_section = True
+                                    continue
+                                elif "Baseline Performance Summary" in line or "Performance Improvement" in line:
+                                    in_ml_section = False
+                                    
+                                if in_ml_section:
+                                    if "Total Return:" in line and 'total_return' not in ml_metrics:
+                                        try:
+                                            ml_metrics['total_return'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                                    elif "Annual Return:" in line and 'annual_return' not in ml_metrics:
+                                        try:
+                                            ml_metrics['annual_return'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                                    elif "Volatility:" in line and 'volatility' not in ml_metrics:
+                                        try:
+                                            ml_metrics['volatility'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                                    elif "Sharpe Ratio:" in line and 'sharpe_ratio' not in ml_metrics:
+                                        try:
+                                            ml_metrics['sharpe_ratio'] = float(line.split(':')[1].strip())
+                                        except:
+                                            pass
+                                    elif "Max Drawdown:" in line and 'max_drawdown' not in ml_metrics:
+                                        try:
+                                            ml_metrics['max_drawdown'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                        
+                        # Don't add default values - let table display "—" for missing metrics
+                        
+                        # Calculate SPY metrics
+                        spy_metrics = calculate_spy_metrics(config['start_date'], config['end_date'])
+                        
+                        # Try to load baseline CLEIR metrics
+                        cleir_metrics = None
+                        try:
+                            cleir_path = Path(__file__).parent.parent.parent / 'results' / 'cleir_index_gui.csv'
+                            if cleir_path.exists():
+                                cleir_df = pd.read_csv(cleir_path, index_col=0, parse_dates=True)
+                                # Filter to same date range
+                                cleir_df = cleir_df.loc[config['start_date']:config['end_date']]
+                                if len(cleir_df) > 0:
+                                    cleir_returns = cleir_df.squeeze().pct_change().dropna()
+                                    cleir_metrics = {
+                                        'total_return': (cleir_df.iloc[-1] / cleir_df.iloc[0]).squeeze() - 1,
+                                        'annual_return': ((cleir_df.iloc[-1] / cleir_df.iloc[0]).squeeze() ** (252 / len(cleir_df))) - 1,
+                                        'volatility': cleir_returns.std() * np.sqrt(252),
+                                        'sharpe_ratio': (cleir_returns.mean() * 252) / (cleir_returns.std() * np.sqrt(252)),
+                                        'max_drawdown': (cleir_df.squeeze() / cleir_df.squeeze().expanding().max() - 1).min()
+                                    }
+                        except Exception as e:
+                            print(f"Could not load baseline CLEIR: {e}")
+                        
+                        # Create and display comparison table
+                        if ml_metrics:
+                            comparison_table = create_performance_comparison_table(
+                                ml_metrics,
+                                cleir_metrics,
+                                spy_metrics
+                            )
+                            
+                            console.print("\n")
+                            console.print(comparison_table)
+                        
+                        # List generated files
+                        console.print("\n[bold]Generated files:[/bold]")
+                        files = [
+                            "ml_enhanced_index.csv",
+                            "ml_feature_importance.png",
+                            "ml_shap_analysis.png",
+                            "ml_performance_comparison.png",
+                            "ml_predictions_analysis.png",
+                            "ml_performance_report.md"
+                        ]
+                        for file in files:
+                            file_path = Path(__file__).parent.parent.parent / 'results' / file
+                            if file_path.exists():
+                                console.print(f"  ✓ {file}")
+                        
+                        # Show abbreviated output from script
                         if result.stdout:
-                            console.print("\n[dim]Script output:[/dim]")
-                            console.print(Panel(result.stdout[-2000:], expand=False))  # Last 2000 chars
+                            # Extract key information from output
+                            output_lines = result.stdout.split('\n')
+                            key_lines = []
+                            for line in output_lines:
+                                if any(keyword in line for keyword in ['IC:', 'Rank stability:', 'Prediction Diagnostics']):
+                                    key_lines.append(line)
+                            
+                            if key_lines:
+                                console.print("\n[dim]Key insights:[/dim]")
+                                for line in key_lines[-5:]:  # Last 5 key insights
+                                    console.print(f"  {line.strip()}")
                     else:
                         show_error("ML enhancement failed!")
                         if result.stderr:
@@ -308,7 +392,10 @@ class CVaRGUI:
                             console.print(result.stderr)
                         
                 except Exception as e:
-                    progress.remove_task(task)
+                    try:
+                        progress.remove_task(task)
+                    except:
+                        pass  # Task might already be removed
                     show_error(f"Error running ML enhancement: {str(e)}")
         
         console.input("\nPress Enter to continue...")

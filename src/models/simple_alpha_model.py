@@ -10,6 +10,7 @@ class SimpleAlphaModel:
         self.model = Ridge(alpha=alpha)
         self.scaler = StandardScaler()
         self.feature_names = None
+        self.X_train_ = None  # Store training data for SHAP
         
     def fit(self, X, y):
         """Fit model with standardized features.
@@ -22,6 +23,7 @@ class SimpleAlphaModel:
             self
         """
         self.feature_names = X.columns.tolist()
+        self.X_train_ = X.copy()  # Store original training data
         X_scaled = self.scaler.fit_transform(X)
         self.model.fit(X_scaled, y)
         return self
