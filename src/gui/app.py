@@ -64,6 +64,7 @@ class CVaRGUI:
             "TASK A - Run CVaR Optimization",
             "TASK B - ML-Enhanced CLEIR (60 stocks, 2014-2019 training)",
             "TASK A&B - View Results",
+            "Strategy Comparison Dashboard (ML vs Baseline vs SPY)",
             "Data Management",
             "About",
             "Exit"
@@ -80,10 +81,12 @@ class CVaRGUI:
         elif choice == "4":
             self.view_results()
         elif choice == "5":
-            self.data_management_menu()
+            self.run_strategy_comparison()
         elif choice == "6":
-            self.show_about()
+            self.data_management_menu()
         elif choice == "7":
+            self.show_about()
+        elif choice == "8":
             self.running = False
             show_info("Goodbye!")
     
@@ -399,6 +402,41 @@ class CVaRGUI:
                     except:
                         pass  # Task might already be removed
                     show_error(f"Error running ML enhancement: {str(e)}")
+        
+        console.input("\nPress Enter to continue...")
+    
+    def run_strategy_comparison(self):
+        """Run strategy comparison dashboard."""
+        from .controllers import ComparisonController
+        
+        clear_screen()
+        console.print(create_header("Strategy Comparison Dashboard"))
+        
+        # Get parameters
+        start_date = get_text_input("Start date", default="2020-01-01")
+        end_date = get_text_input("End date", default="2024-12-31")
+        force_refresh = confirm_action("Force recalculation of cached results?", default=False)
+        
+        # Create comparison controller
+        comparison_controller = ComparisonController()
+        
+        # Run comparison
+        try:
+            results = comparison_controller.run_comparison(
+                start_date=start_date,
+                end_date=end_date,
+                force_refresh=force_refresh
+            )
+            
+            if results:
+                console.print("\n[green]✓ Comparison completed successfully![/green]")
+            else:
+                console.print("\n[yellow]No results to display. Run ML-Enhanced CLEIR first.[/yellow]")
+                
+        except Exception as e:
+            show_error(f"Error running comparison: {str(e)}")
+            import traceback
+            console.print("\n[dim]" + traceback.format_exc() + "[/dim]")
         
         console.input("\nPress Enter to continue...")
     
