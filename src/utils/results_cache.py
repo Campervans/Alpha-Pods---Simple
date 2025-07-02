@@ -77,7 +77,7 @@ def load_results(name: str, *, refresh: bool = False, path: Path = Path("results
         results = _generate_baseline_cleir()
     elif name == "spy":
         results = _generate_spy_benchmark()
-    elif name == "ml_cleir":
+    elif name in ["ml_cleir", "ml_enhanced_cleir"]:
         # ML results must be pre-generated
         raise FileNotFoundError(
             f"ML-Enhanced CLEIR results not found at {filename}. "
