@@ -11,14 +11,14 @@ def calculate_rsi(prices, period=14):
     return rsi
 
 def create_simple_features(prices, volumes):
-    """Create 7 simple technical features for a single stock.
+    """Create 8 simple technical features for a single stock.
     
     Args:
         prices: pd.Series of stock prices
         volumes: pd.Series of stock volumes
         
     Returns:
-        pd.DataFrame with 7 feature columns
+        pd.DataFrame with 8 feature columns (including risk-adjusted momentum)
     """
     features = pd.DataFrame(index=prices.index)
     
@@ -36,6 +36,13 @@ def create_simple_features(prices, volumes):
     
     # 7. RSI
     features['rsi'] = calculate_rsi(prices, 14)
+    
+    # 8. Risk-adjusted momentum (new sophisticated feature)
+    # Combines return and risk - often outperforms simple momentum
+    six_month_return = prices.pct_change(126)
+    six_month_vol = returns.rolling(126).std()
+    # Avoid division by zero with small epsilon
+    features['risk_adj_momentum_6m'] = six_month_return / (six_month_vol + 1e-10)
     
     # Forward fill then drop initial NaNs to handle missing data robustly
     features = features.ffill().replace([np.inf, -np.inf], np.nan).ffill()
