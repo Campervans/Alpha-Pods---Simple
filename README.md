@@ -2,7 +2,7 @@
 
 This project provides a comprehensive framework for constructing and backtesting equity portfolios using both traditional and machine-learning-enhanced optimization techniques, to complete Tasks A and B of the eToro Alphapod challenge.
 
-![AlphaPod Screenshot](AlphaPod_Screenshot.png)
+![AlphaPodScreenshot](AlphaPodScreenshot.png)
 
 
 ## Quick Quick Start:
