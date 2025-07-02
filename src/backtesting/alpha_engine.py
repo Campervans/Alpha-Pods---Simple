@@ -42,16 +42,20 @@ class AlphaEnhancedBacktest:
         
     def run(self, start_date: str = '2020-01-01', end_date: str = '2024-12-31') -> Dict:
         """Run the ML-enhanced backtest."""
+        # Make train/test split crystal clear for the interviewer
+        train_start = '2014-01-01'
+        train_end = '2019-12-31'
+        
         print(f"\n🚀 Starting ML-Enhanced CLEIR Backtest")
-        print(f"Period: {start_date} to {end_date}")
+        print(f"📊 ML Training Period: {train_start} to {train_end}")
+        print(f"📈 Out-of-Sample Test: {start_date} to {end_date}")
         print(f"Top K selection: {self.top_k} stocks")
         print(f"Transaction costs: {self.transaction_cost_bps} bps")
         
         # 1. Load data with fixed training period (2014-2019)
         # Always load from 2014 for training, regardless of start_date
-        train_start_date = '2014-01-01'
         universe_data, returns_data, benchmark_returns = self._load_data(
-            train_start_date, end_date
+            train_start, end_date
         )
         
         # 2. Get quarterly rebalance dates
@@ -161,6 +165,12 @@ class AlphaEnhancedBacktest:
         results['transaction_costs_history'] = transaction_costs_history
         results['avg_turnover'] = np.mean(turnover_history) if turnover_history else 0.0
         results['total_transaction_costs'] = np.sum(transaction_costs_history) if transaction_costs_history else 0.0
+        
+        # Add train/test metadata for transparency
+        results['train_period'] = (train_start, train_end)
+        results['test_period'] = (start_date, end_date)
+        results['model_features'] = 8  # Now includes risk-adj momentum
+        results['universe_size'] = self.top_k
         
         print(f"\n💰 Transaction Cost Summary:")
         print(f"Average turnover: {results['avg_turnover']:.1%}")

@@ -62,7 +62,7 @@ class CVaRGUI:
         options = [
             "TASK A - Run CLEIR Optimization",
             "TASK A - Run CVaR Optimization",
-            "TASK B - Run Alpha Overlay Enhancement",
+            "TASK B - ML-Enhanced CLEIR (60 stocks, 2014-2019 training)",
             "TASK A&B - View Results",
             "Data Management",
             "About",
@@ -215,8 +215,10 @@ class CVaRGUI:
         info_text = Text()
         info_text.append("This feature enhances the CLEIR optimization with machine learning:\n\n", style="bold")
         info_text.append("• Uses Ridge regression to predict 3-month returns\n")
-        info_text.append("• Features: momentum, volatility, volume, and RSI indicators\n")
-        info_text.append("• Selects top 30 stocks based on alpha predictions\n")
+        info_text.append("• Features: momentum, volatility, volume, RSI, and risk-adjusted momentum\n")
+        info_text.append("• Selects top 60 stocks based on alpha predictions (expanded from 30)\n")
+        info_text.append("• Training: 2014-2019 (fixed window)\n")
+        info_text.append("• Testing: 2020-2024 (out-of-sample)\n")
         info_text.append("• Applies CLEIR optimization to the selected universe\n")
         info_text.append("• Walk-forward training prevents look-ahead bias\n")
         
