@@ -54,17 +54,17 @@ The backtesting scripts generate the following files in the `results/` directory
 *   `performance_comparison.png`: A chart visualizing the performance of different strategies.
 *   `ml_shap_analysis.png`: SHAP analysis plots for interpreting the ML model's predictions.
 *   `ml_predictions_analysis.png`: Diagnostic plots for the ML model's predictions.
-
+  
 ## Methodology
 
 The CLEIR model is based on the following optimization problem:
 
-\[ \min_{w} \text{CVaR}_{\alpha}(R_p - R_b) \]
+min_w CVaR_α(Rₚ − R_b)
 
-subject to:
-\[ \sum_{i=1}^{N} |w_i| \le s, \quad \sum_{i=1}^{N} w_i = 1, \quad w_i \ge 0 \]
+subject to:  
+∑ |wᵢ| ≤ s, ∑ wᵢ = 1, wᵢ ≥ 0
 
-where \( R_p \) is the portfolio return, \( R_b \) is the benchmark return, \( w \) are the portfolio weights, \( \alpha \) is the CVaR confidence level, and \( s \) is the sparsity bound.
+where Rₚ is the portfolio return, R_b is the benchmark return, w are the portfolio weights, α is the CVaR confidence level, and s is the sparsity bound.
 
 ## References
 
