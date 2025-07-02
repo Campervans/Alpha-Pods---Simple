@@ -9,17 +9,7 @@ from src.models.walk_forward import SimpleWalkForward
 from src.optimization.cleir_solver import solve_cleir
 from src.utils.schemas import OptimizationConfig
 from src.utils.core import calculate_turnover, calculate_transaction_costs
-
-# Define top 60 universe (available large cap stocks from S&P 100)
-# These are the 60 stocks available in our data
-TOP_60_UNIVERSE = [
-    'AAPL', 'ABBV', 'ACN', 'ADBE', 'ADI', 'ADP', 'AMGN', 'AMZN', 'APH', 'AVGO',
-    'AXP', 'BAC', 'BKNG', 'BLK', 'BRK-B', 'CAT', 'CMCSA', 'COST', 'CRM', 'CVX',
-    'DIS', 'EMR', 'GE', 'GILD', 'GOOGL', 'HD', 'HUM', 'JNJ', 'JPM', 'KLAC',
-    'KO', 'LIN', 'LLY', 'LRCX', 'MA', 'MDLZ', 'META', 'MO', 'MSFT', 'NEE',
-    'NKE', 'NVDA', 'ORCL', 'PEP', 'PFE', 'PG', 'RTX', 'SBUX', 'SLB', 'SPGI',
-    'SYK', 'TMO', 'TSLA', 'TXN', 'UNH', 'USB', 'V', 'VZ', 'WMT', 'XOM'
-]
+from src.market_data.universe import get_ml_universe  # Centralized universe
 
 class AlphaEnhancedBacktest:
     """ML-enhanced CLEIR backtest using an alpha overlay."""
@@ -195,7 +185,7 @@ class AlphaEnhancedBacktest:
                 
             # Get universe tickers (top 60) that exist in the data
             available_tickers = price_df.columns.tolist()
-            universe_tickers = [t for t in TOP_60_UNIVERSE if t in available_tickers]
+            universe_tickers = [t for t in get_ml_universe() if t in available_tickers]
             
             # Check if benchmark exists
             if self.benchmark_ticker not in available_tickers:
