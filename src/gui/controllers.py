@@ -431,38 +431,25 @@ class OptimizationController:
     def _generate_performance_plot(self, index_type: str):
         """Generate performance comparison plot for the given index type."""
         try:
-            # Import the plot generation script
-            import subprocess
-            import sys
+            # Import the plot generation functions directly
+            from scripts.generate_performance_comparison_plots import load_index_data, create_performance_plot
             
-            # Create a simple script to generate just one plot
-            script_content = f"""
-import sys
-sys.path.append('.')
-from scripts.generate_performance_comparison_plots import load_index_data, create_performance_plot
-
-# Load data
-cvar_df, cleir_df = load_index_data()
-
-# Generate plot for {index_type}
-if '{index_type}' == 'cvar':
-    create_performance_plot(cvar_df, 'CVaR', 'results/cvar_index_performance_analysis.png')
-else:
-    create_performance_plot(cleir_df, 'CLEIR', 'results/cleir_index_performance_analysis.png')
-"""
+            # Load data
+            cvar_df, cleir_df = load_index_data()
             
-            # Run the script
-            result = subprocess.run(
-                [sys.executable, '-c', script_content],
-                capture_output=True,
-                text=True,
-                cwd=str(Path(__file__).parent.parent.parent)
-            )
-            
-            if result.returncode == 0:
-                console.print(f"[dim]✓ Generated {index_type}_index_performance_analysis.png[/dim]")
+            # Generate plot for the specified index type
+            if index_type == 'cvar':
+                if cvar_df is not None:
+                    create_performance_plot(cvar_df, 'CVaR', 'results/cvar_index_performance_analysis.png')
+                    console.print(f"[dim]✓ Generated cvar_index_performance_analysis.png[/dim]")
+                else:
+                    console.print(f"[yellow]Warning: No CVaR data available to plot[/yellow]")
             else:
-                console.print(f"[yellow]Warning: Could not generate performance plot: {result.stderr}[/yellow]")
+                if cleir_df is not None:
+                    create_performance_plot(cleir_df, 'CLEIR', 'results/cleir_index_performance_analysis.png')
+                    console.print(f"[dim]✓ Generated cleir_index_performance_analysis.png[/dim]")
+                else:
+                    console.print(f"[yellow]Warning: No CLEIR data available to plot[/yellow]")
                 
         except Exception as e:
             console.print(f"[yellow]Warning: Could not generate performance plot: {str(e)}[/yellow]")

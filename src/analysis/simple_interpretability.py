@@ -134,8 +134,8 @@ def _plot_single_model_shap(trainer, num_samples: int = 100):
     fig = plt.figure(figsize=(16, 12))
     fig.suptitle(f'SHAP Analysis for {ticker} Alpha Model', fontsize=20, fontweight='bold')
     
-    # grid spec for layout
-    gs = fig.add_gridspec(3, 2, height_ratios=[1, 1.5, 1], hspace=0.3, wspace=0.3)
+    # Create grid spec for layout with increased spacing
+    gs = fig.add_gridspec(3, 2, height_ratios=[1, 1.5, 1], hspace=0.5, wspace=0.4)
     
     # 1. bar plot of mean |SHAP| vals
     ax1 = fig.add_subplot(gs[0, :])

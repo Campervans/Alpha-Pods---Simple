@@ -92,8 +92,8 @@ def plot_aggregated_shap_analysis(trainer, num_samples: int = 100):
     fig = plt.figure(figsize=(20, 16))
     fig.suptitle('Aggregated SHAP Analysis', fontsize=22, fontweight='bold')
     
-    # grid for subplots
-    gs = fig.add_gridspec(3, 3, height_ratios=[1, 1.2, 1], hspace=0.3, wspace=0.3)
+    # Create grid with increased spacing
+    gs = fig.add_gridspec(3, 3, height_ratios=[1, 1.2, 1], hspace=0.5, wspace=0.4)
     
     # 1. global feature importance
     ax1 = fig.add_subplot(gs[0, :2])

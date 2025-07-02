@@ -194,8 +194,8 @@ class CVaRGUI:
                 
                 console.print(results_table)
                 
-                # check if performance analysis graph exists
-                graph_path = "/Users/james/Alpha-Pods---Simple/results/cvar_index_performance_analysis.png"
+                # Check if performance analysis graph exists
+                graph_path = os.path.join("results", "cvar_index_performance_analysis.png")
                 if os.path.exists(graph_path):
                     console.print("\n[bold]📊 Performance Analysis Graph:[/bold]")
                     console.print(f"[link=file://{graph_path}]{graph_path}[/link]")
@@ -716,8 +716,7 @@ class CVaRGUI:
                         
                         try:
                             # Import and run the generation script
-                            sys.path.append(str(Path(__file__).parent.parent.parent / 'scripts'))
-                            from generate_final_results import main as generate_results
+                            from scripts.generate_final_results import main as generate_results
                             
                             # Temporarily redirect stdout to capture output
                             import io
@@ -882,7 +881,7 @@ class CVaRGUI:
                 console.print(results_table)
                 
                 # Check if performance analysis graph exists
-                graph_path = "/Users/james/Alpha-Pods---Simple/results/cleir_index_performance_analysis.png"
+                graph_path = os.path.join("results", "cleir_index_performance_analysis.png")
                 if os.path.exists(graph_path):
                     console.print("\n[bold]📊 Performance Analysis Graph:[/bold]")
                     console.print(f"[link=file://{graph_path}]{graph_path}[/link]")
