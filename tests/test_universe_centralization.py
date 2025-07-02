@@ -31,7 +31,24 @@ def test_universe_import():
         raise AssertionError(f"Import failed: {e}")
 
 
+def test_default_top_k_is_60():
+    """Test that default top_k parameter is now 60."""
+    from src.backtesting.alpha_engine import AlphaEnhancedBacktest
+    from src.optimization.ml_cleir_optimizer import MLCLEIROptimizer
+    
+    # Test AlphaEnhancedBacktest
+    backtest = AlphaEnhancedBacktest()
+    assert backtest.top_k == 60, f"Expected top_k=60, got {backtest.top_k}"
+    
+    # Test MLCLEIROptimizer
+    optimizer = MLCLEIROptimizer()
+    assert optimizer.top_k == 60, f"Expected top_k=60, got {optimizer.top_k}"
+    
+    print("✅ Default top_k is 60 for both classes")
+
+
 if __name__ == "__main__":
     test_ml_universe_size()
     test_universe_import()
+    test_default_top_k_is_60()
     print("\n✅ All universe centralization tests passed!") 

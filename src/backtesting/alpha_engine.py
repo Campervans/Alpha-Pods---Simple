@@ -14,7 +14,14 @@ from src.market_data.universe import get_ml_universe  # Centralized universe
 class AlphaEnhancedBacktest:
     """ML-enhanced CLEIR backtest using an alpha overlay."""
     
-    def __init__(self, optimization_config: Optional[OptimizationConfig] = None, top_k: int = 30, transaction_cost_bps: float = 10.0):
+    def __init__(self, optimization_config: Optional[OptimizationConfig] = None, 
+                 top_k: int = 60,  # Changed from 30 to match Task A universe size
+                 transaction_cost_bps: float = 10.0):
+        """Initialize ML-enhanced CLEIR backtest.
+        
+        Note: We now use all 60 stocks in the universe to match Task A
+        and provide better diversification opportunities.
+        """
         self.config = optimization_config or self._get_default_config()
         self.trainer = SimpleWalkForward()
         self.top_k = top_k
