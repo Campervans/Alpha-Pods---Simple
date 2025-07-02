@@ -47,10 +47,8 @@ Find the raw scripts in the src > optimization folder.
 
 The backtesting scripts generate the following files in the `results/` directory:
 
-*   `baseline_cvar_index.csv`: Daily index values for the baseline CVaR strategy.
-*   `performance_metrics.xlsx`: A detailed breakdown of performance and risk metrics compared against benchmarks.
-*   `rebalancing_events.csv`: A log of all rebalancing trades and associated costs.
-*   `weights_history.csv`: Historical portfolio weights at each rebalancing date.
+*   `daily_index_values.csv` and `cleir_index_gui.csv`: Task A Daily index values for the CLEIR strategy.
+*   `ml_portfolio_weights.csv`: Portfolio weights at each rebalancing date.
 *   `performance_comparison.png`: A chart visualizing the performance of different strategies.
 *   `ml_shap_analysis.png`: SHAP analysis plots for interpreting the ML model's predictions.
 *   `ml_predictions_analysis.png`: Diagnostic plots for the ML model's predictions.
