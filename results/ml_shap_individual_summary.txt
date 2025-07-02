@@ -1,0 +1,30 @@
+# Individual Model SHAP Feature Importance
+
+Analysis of 60 models
+
+## Top Features Globally
+1. return_6m: 0.0155
+2. return_1m: 0.0138
+3. return_3m: 0.0119
+4. volatility_3m: 0.0099
+5. volatility_1m: 0.0086
+6. rsi: 0.0056
+7. volume_ratio: 0.0008
+
+## Stocks with Unique Feature Preferences
+
+**AAPL**: Prefers volatility_3m (0.029) vs global top return_6m
+
+**ACN**: Prefers return_1m (0.023) vs global top return_6m
+
+**ADBE**: Prefers return_1m (0.038) vs global top return_6m
+
+**ADI**: Prefers return_1m (0.023) vs global top return_6m
+
+**ADP**: Prefers return_1m (0.023) vs global top return_6m
+
+**AMGN**: Prefers return_1m (0.008) vs global top return_6m
+
+**APH**: Prefers volatility_1m (0.030) vs global top return_6m
+
+**AVGO**: Prefers return_1m (0.025) vs global top return_6m
