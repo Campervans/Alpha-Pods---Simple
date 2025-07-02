@@ -290,3 +290,184 @@ def create_mini_sparkline(values: list, width: int = 20, height: int = 5) -> str
     plt.plot(values)
     plt.theme('dark')
     return plt.build()  # Returns string representation
+
+
+def plot_equity_curves(curves: Dict[str, pd.Series], 
+                      title: str = "Strategy Comparison",
+                      width: int = 100,
+                      height: int = 30) -> None:
+    """Plot multiple equity curves on single chart.
+    
+    Args:
+        curves: Dictionary mapping strategy names to pandas Series of daily values
+        title: Chart title
+        width: Plot width in characters
+        height: Plot height in characters
+    """
+    console = Console()
+    
+    if not curves:
+        console.print("[yellow]No data to plot[/yellow]")
+        return
+    
+    # Clear any existing plot
+    plt.clf()
+    plt.theme('dark')
+    
+    # Find common date range
+    all_dates = None
+    for name, series in curves.items():
+        if all_dates is None:
+            all_dates = series.index
+        else:
+            all_dates = all_dates.intersection(series.index)
+    
+    if len(all_dates) == 0:
+        console.print("[red]No overlapping dates between strategies[/red]")
+        return
+    
+    # Convert to days since start for plotting
+    days_since_start = (all_dates - all_dates[0]).days
+    
+    # Color mapping for strategies
+    colors = {
+        'ML-Enhanced CLEIR': 'green',
+        'Baseline CLEIR': 'yellow', 
+        'SPY Benchmark': 'cyan',
+        'Equal-Weight': 'magenta'
+    }
+    
+    # Plot each curve
+    for i, (name, series) in enumerate(curves.items()):
+        # Align to common dates
+        aligned_values = series.loc[all_dates]
+        
+        # Normalize to start at 100
+        normalized_values = (aligned_values / aligned_values.iloc[0]) * 100
+        
+        # Get color
+        color = colors.get(name, ['red', 'blue', 'white'][i % 3])
+        
+        # Plot
+        plt.plot(days_since_start, normalized_values.values, label=name, color=color)
+    
+    # Formatting
+    plt.title(title)
+    plt.xlabel('Days Since Start')
+    plt.ylabel('Index Value (Base = 100)')
+    plt.grid(True, True)
+    plt.plotsize(width, height)
+    
+    # Show the plot
+    console.print(f"\n[bold cyan]{title}[/bold cyan]")
+    plt.show()
+
+
+def render_metrics_table(metrics: Dict[str, Dict[str, float]], 
+                        title: str = "Performance Metrics Comparison") -> None:
+    """Display performance metrics in Rich table format.
+    
+    Args:
+        metrics: Dictionary mapping strategy names to metric dictionaries
+        title: Table title
+    """
+    console = Console()
+    
+    if not metrics:
+        console.print("[yellow]No metrics to display[/yellow]")
+        return
+    
+    # Create table
+    table = Table(title=title, box=box.ROUNDED, show_header=True)
+    
+    # Add metric name column
+    table.add_column("Metric", style="cyan", no_wrap=True)
+    
+    # Add column for each strategy
+    strategy_names = list(metrics.keys())
+    colors = ['green', 'yellow', 'blue', 'magenta', 'red']
+    
+    for i, strategy in enumerate(strategy_names):
+        color = colors[i % len(colors)]
+        table.add_column(strategy, style=color, justify="right")
+    
+    # Add best performer column
+    table.add_column("Best", style="bold white", justify="center")
+    
+    # Define metrics to show and their formatting
+    metric_info = {
+        'total_return': ('Total Return', lambda x: f"{x:.2%}", True),  # Higher is better
+        'annual_return': ('Annual Return', lambda x: f"{x:.2%}", True),
+        'volatility': ('Volatility', lambda x: f"{x:.2%}", False),  # Lower is better
+        'sharpe_ratio': ('Sharpe Ratio', lambda x: f"{x:.3f}", True),
+        'max_drawdown': ('Max Drawdown', lambda x: f"{x:.2%}", False),
+        'avg_turnover': ('Avg Turnover', lambda x: f"{x:.1%}", False),
+        'transaction_costs': ('Transaction Costs', lambda x: f"{x:.2%}", False)
+    }
+    
+    # Add rows for each metric
+    for metric_key, (display_name, formatter, higher_is_better) in metric_info.items():
+        row_values = []
+        
+        # Collect values for this metric
+        metric_values = {}
+        for strategy in strategy_names:
+            if metric_key in metrics[strategy]:
+                value = metrics[strategy][metric_key]
+                metric_values[strategy] = value
+                row_values.append(formatter(value))
+            else:
+                row_values.append("—")
+        
+        # Find best performer
+        if metric_values:
+            if higher_is_better:
+                best_strategy = max(metric_values, key=metric_values.get)
+            else:
+                best_strategy = min(metric_values, key=metric_values.get)
+            
+            # Get strategy index for star
+            best_idx = strategy_names.index(best_strategy)
+            row_values.append("⭐" if len(metric_values) > 1 else "")
+            
+            # Highlight best value
+            row_values[best_idx] = f"[bold]{row_values[best_idx]}[/bold]"
+        else:
+            row_values.append("")
+        
+        # Add row
+        table.add_row(display_name, *row_values)
+    
+    # Add separator
+    table.add_row("", *[""] * (len(strategy_names) + 1))
+    
+    # Add relative performance section if we have SPY
+    if 'SPY Benchmark' in metrics and len(metrics) > 1:
+        spy_metrics = metrics['SPY Benchmark']
+        
+        for strategy in strategy_names:
+            if strategy == 'SPY Benchmark':
+                continue
+                
+            strat_metrics = metrics[strategy]
+            
+            # Calculate excess return
+            if 'annual_return' in strat_metrics and 'annual_return' in spy_metrics:
+                excess = strat_metrics['annual_return'] - spy_metrics['annual_return']
+                
+                row_values = [""] * len(strategy_names)
+                row_values[strategy_names.index(strategy)] = f"{excess:+.2%}"
+                
+                table.add_row(
+                    f"Excess vs SPY",
+                    *row_values,
+                    "📈" if excess > 0 else "📉"
+                )
+    
+    # Display table
+    console.print("\n")
+    console.print(table)
+    
+    # Add summary text
+    if len(metrics) > 1:
+        console.print("\n[dim]⭐ = Best performer | 📈 = Outperforms SPY | 📉 = Underperforms SPY[/dim]")

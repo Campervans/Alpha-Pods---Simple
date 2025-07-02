@@ -508,4 +508,130 @@ class ResultsController:
             path = os.path.join(self.results_dir, filename)
             status[key] = os.path.exists(path)
         
-        return status 
+        return status
+
+
+class ComparisonController:
+    """Controller for comparing ML-Enhanced CLEIR, Baseline CLEIR, and SPY."""
+    
+    def __init__(self):
+        self.console = Console()
+        
+    def run_comparison(self, 
+                      start_date: str = "2018-01-01",
+                      end_date: str = "2023-12-31",
+                      force_refresh: bool = False) -> Dict[str, Any]:
+        """Run full comparison of all strategies.
+        
+        Args:
+            start_date: Start date for comparison
+            end_date: End date for comparison  
+            force_refresh: Force recalculation even if cached
+            
+        Returns:
+            Dictionary with all results
+        """
+        from ..utils.results_cache import load_results, save_results, load_spy_benchmark
+        from ..utils.cleir_runner import run_baseline_cleir
+        from ..analysis.metrics import summarise_results, calculate_relative_metrics
+        from .visualization import plot_equity_curves, render_metrics_table
+        
+        self.console.print("\n[bold cyan]Strategy Comparison Dashboard[/bold cyan]")
+        self.console.print(f"Period: {start_date} to {end_date}\n")
+        
+        results = {}
+        
+        # 1. Load ML-Enhanced CLEIR results
+        self.console.print("[yellow]Loading ML-Enhanced CLEIR results...[/yellow]")
+        ml_results = load_results("ml_enhanced_cleir")
+        
+        if ml_results is None:
+            self.console.print("[red]No ML-Enhanced CLEIR results found. Run ML optimization first.[/red]")
+            return {}
+        
+        results['ML-Enhanced CLEIR'] = ml_results
+        
+        # 2. Load or generate Baseline CLEIR
+        self.console.print("[yellow]Loading Baseline CLEIR results...[/yellow]")
+        baseline_key = f"baseline_cleir_{start_date}_{end_date}"
+        
+        if force_refresh:
+            baseline_results = None
+        else:
+            baseline_results = load_results(baseline_key)
+        
+        if baseline_results is None:
+            self.console.print("[yellow]Generating Baseline CLEIR results...[/yellow]")
+            baseline_results = run_baseline_cleir(start_date, end_date)
+            save_results(baseline_results, baseline_key)
+        
+        results['Baseline CLEIR'] = baseline_results
+        
+        # 3. Load SPY benchmark
+        self.console.print("[yellow]Loading SPY benchmark data...[/yellow]")
+        spy_results = load_spy_benchmark(start_date, end_date)
+        results['SPY Benchmark'] = spy_results
+        
+        # 4. Prepare equity curves
+        curves = {}
+        for name, result in results.items():
+            if 'index_values' in result:
+                curves[name] = result['index_values']
+        
+        # 5. Plot equity curves
+        plot_equity_curves(curves, title="Strategy Performance Comparison")
+        
+        # 6. Prepare metrics
+        metrics = {}
+        for name, result in results.items():
+            if 'metrics' in result:
+                metrics[name] = result['metrics']
+        
+        # 7. Display metrics table
+        render_metrics_table(metrics, title="Performance Metrics Comparison")
+        
+        # 8. Calculate relative metrics
+        self.console.print("\n[bold cyan]Relative Performance Analysis[/bold cyan]")
+        
+        # ML vs Baseline
+        if 'ML-Enhanced CLEIR' in results and 'Baseline CLEIR' in results:
+            ml_vs_baseline = calculate_relative_metrics(
+                results['ML-Enhanced CLEIR'],
+                results['Baseline CLEIR']
+            )
+            
+            self.console.print("\n[green]ML-Enhanced vs Baseline CLEIR:[/green]")
+            for metric, value in ml_vs_baseline.items():
+                if 'ratio' in metric:
+                    self.console.print(f"  {metric}: {value:.3f}")
+                else:
+                    self.console.print(f"  {metric}: {value:+.2%}")
+        
+        # ML vs SPY
+        if 'ML-Enhanced CLEIR' in results and 'SPY Benchmark' in results:
+            ml_vs_spy = calculate_relative_metrics(
+                results['ML-Enhanced CLEIR'],
+                results['SPY Benchmark']
+            )
+            
+            self.console.print("\n[green]ML-Enhanced vs SPY:[/green]")
+            for metric, value in ml_vs_spy.items():
+                if 'ratio' in metric:
+                    self.console.print(f"  {metric}: {value:.3f}")
+                else:
+                    self.console.print(f"  {metric}: {value:+.2%}")
+        
+        # 9. Summary statistics
+        self.console.print("\n[bold cyan]Summary Statistics[/bold cyan]")
+        
+        for name, result in results.items():
+            summary = summarise_results(result)
+            self.console.print(f"\n[yellow]{name}:[/yellow]")
+            self.console.print(f"  Period: {summary['start_date']} to {summary['end_date']}")
+            self.console.print(f"  Trading Days: {summary['n_days']}")
+            self.console.print(f"  Total Return: {summary['total_return']:.2%}")
+            self.console.print(f"  Annual Return: {summary['annual_return']:.2%}")
+            self.console.print(f"  Sharpe Ratio: {summary['sharpe_ratio']:.3f}")
+            self.console.print(f"  Max Drawdown: {summary['max_drawdown']:.2%}")
+        
+        return results 
