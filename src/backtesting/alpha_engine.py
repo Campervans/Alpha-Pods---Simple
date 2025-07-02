@@ -8,6 +8,7 @@ import os
 from src.models.walk_forward import SimpleWalkForward
 from src.optimization.cleir_solver import solve_cleir
 from src.utils.schemas import OptimizationConfig
+from src.utils.core import calculate_turnover, calculate_transaction_costs
 
 # Define top 60 universe (available large cap stocks from S&P 100)
 # These are the 60 stocks available in our data
@@ -23,12 +24,13 @@ TOP_60_UNIVERSE = [
 class AlphaEnhancedBacktest:
     """ML-enhanced CLEIR backtest using an alpha overlay."""
     
-    def __init__(self, optimization_config: Optional[OptimizationConfig] = None, top_k: int = 30):
+    def __init__(self, optimization_config: Optional[OptimizationConfig] = None, top_k: int = 30, transaction_cost_bps: float = 10.0):
         self.config = optimization_config or self._get_default_config()
         self.trainer = SimpleWalkForward()
         self.top_k = top_k
         self.ml_predictions = None
         self.benchmark_ticker = 'SPY'
+        self.transaction_cost_bps = transaction_cost_bps
         
     def _get_default_config(self) -> OptimizationConfig:
         """Default CLEIR configuration."""
@@ -46,6 +48,7 @@ class AlphaEnhancedBacktest:
         print(f"\n🚀 Starting ML-Enhanced CLEIR Backtest")
         print(f"Period: {start_date} to {end_date}")
         print(f"Top K selection: {self.top_k} stocks")
+        print(f"Transaction costs: {self.transaction_cost_bps} bps")
         
         # 1. Load data with fixed training period (2014-2019)
         # Always load from 2014 for training, regardless of start_date
@@ -66,6 +69,11 @@ class AlphaEnhancedBacktest:
         print("\n💼 Running portfolio optimization...")
         portfolio_weights = {}
         selected_universes = {}
+        turnover_history = []
+        transaction_costs_history = []
+        
+        # Initialize previous weights (start with empty portfolio)
+        prev_weights = {}
         
         for i, date in enumerate(rebalance_dates):
             print(f"\nRebalancing {i+1}/{len(rebalance_dates)}: {date.date()}")
@@ -108,7 +116,31 @@ class AlphaEnhancedBacktest:
                 
                 # Store weights with full ticker mapping
                 weight_dict = {ticker: weight for ticker, weight in zip(selected_tickers, weights)}
+                
+                # Calculate turnover and transaction costs
+                if i > 0 and prev_weights:
+                    # Create weight vectors for all tickers (including zeros)
+                    all_tickers = list(set(prev_weights.keys()) | set(weight_dict.keys()))
+                    old_weights_vec = np.array([prev_weights.get(t, 0.0) for t in all_tickers])
+                    new_weights_vec = np.array([weight_dict.get(t, 0.0) for t in all_tickers])
+                    
+                    # Calculate turnover
+                    turnover = calculate_turnover(old_weights_vec, new_weights_vec)
+                    transaction_cost = calculate_transaction_costs(turnover, self.transaction_cost_bps)
+                    
+                    turnover_history.append(turnover)
+                    transaction_costs_history.append(transaction_cost)
+                    
+                    print(f"  Turnover: {turnover:.1%}, Transaction cost: {transaction_cost:.3%}")
+                else:
+                    # First rebalance - initial purchase
+                    turnover = 1.0  # 100% turnover from cash to invested
+                    transaction_cost = calculate_transaction_costs(turnover, self.transaction_cost_bps)
+                    turnover_history.append(turnover)
+                    transaction_costs_history.append(transaction_cost)
+                
                 portfolio_weights[date] = weight_dict
+                prev_weights = weight_dict.copy()
                 
                 # Show top holdings
                 top_holdings = sorted(weight_dict.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -121,12 +153,21 @@ class AlphaEnhancedBacktest:
         # 5. Calculate portfolio performance
         print("\n📈 Calculating portfolio performance...")
         results = self._calculate_performance(
-            portfolio_weights, returns_data, rebalance_dates, start_date, end_date
+            portfolio_weights, returns_data, rebalance_dates, start_date, end_date,
+            transaction_costs_history
         )
         
         # Add ML-specific information
         results['selected_universes'] = selected_universes
         results['ml_predictions'] = self.ml_predictions
+        results['turnover_history'] = turnover_history
+        results['transaction_costs_history'] = transaction_costs_history
+        results['avg_turnover'] = np.mean(turnover_history) if turnover_history else 0.0
+        results['total_transaction_costs'] = np.sum(transaction_costs_history) if transaction_costs_history else 0.0
+        
+        print(f"\n💰 Transaction Cost Summary:")
+        print(f"Average turnover: {results['avg_turnover']:.1%}")
+        print(f"Total transaction costs: {results['total_transaction_costs']:.2%}")
         
         return results
     
@@ -203,7 +244,8 @@ class AlphaEnhancedBacktest:
         return dates.tolist()
     
     def _calculate_performance(self, portfolio_weights: Dict, returns_data: pd.DataFrame,
-                              rebalance_dates: List, start_date: str, end_date: str) -> Dict:
+                              rebalance_dates: List, start_date: str, end_date: str,
+                              transaction_costs_history: List) -> Dict:
         """Calculate portfolio performance metrics."""
         # Create daily portfolio values
         daily_values = pd.Series(index=returns_data.loc[start_date:end_date].index, dtype=float)
@@ -211,6 +253,7 @@ class AlphaEnhancedBacktest:
         
         # Track current weights
         current_weights = {}
+        transaction_cost_idx = 0
         
         for i in range(1, len(daily_values)):
             date = daily_values.index[i]
@@ -219,6 +262,13 @@ class AlphaEnhancedBacktest:
             # Check if we need to rebalance
             if date in portfolio_weights:
                 current_weights = portfolio_weights[date]
+                
+                # Apply transaction cost on rebalance date
+                if transaction_cost_idx < len(transaction_costs_history):
+                    # Apply transaction cost to the previous day's value
+                    # This represents the cost of rebalancing
+                    daily_values.iloc[i-1] *= (1 - transaction_costs_history[transaction_cost_idx])
+                    transaction_cost_idx += 1
             
             # Calculate portfolio return
             if current_weights:
@@ -242,7 +292,8 @@ class AlphaEnhancedBacktest:
             'volatility': returns.std() * np.sqrt(252),
             'sharpe_ratio': (returns.mean() * 252) / (returns.std() * np.sqrt(252)),
             'max_drawdown': (daily_values / daily_values.expanding().max() - 1).min(),
-            'portfolio_weights': portfolio_weights
+            'portfolio_weights': portfolio_weights,
+            'transaction_costs_history': transaction_costs_history
         }
         
         print(f"\n📊 Performance Summary:")

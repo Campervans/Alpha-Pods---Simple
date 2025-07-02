@@ -49,24 +49,30 @@ def create_performance_comparison_table(
         row = [display_name]
         
         # ML-Enhanced value
-        ml_value = ml_metrics.get(key, 0)
-        if fmt.endswith('%'):
+        ml_value = ml_metrics.get(key, None)
+        if ml_value is None:
+            row.append("—")
+        elif fmt.endswith('%'):
             row.append(f"{ml_value:{fmt}}")
         else:
             row.append(f"{ml_value:{fmt}}")
         
         # Baseline CLEIR value
         if cleir_metrics:
-            cleir_value = cleir_metrics.get(key, 0)
-            if fmt.endswith('%'):
+            cleir_value = cleir_metrics.get(key, None)
+            if cleir_value is None:
+                row.append("—")
+            elif fmt.endswith('%'):
                 row.append(f"{cleir_value:{fmt}}")
             else:
                 row.append(f"{cleir_value:{fmt}}")
         
         # SPY value
         if spy_metrics:
-            spy_value = spy_metrics.get(key, 0)
-            if fmt.endswith('%'):
+            spy_value = spy_metrics.get(key, None)
+            if spy_value is None:
+                row.append("—")
+            elif fmt.endswith('%'):
                 row.append(f"{spy_value:{fmt}}")
             else:
                 row.append(f"{spy_value:{fmt}}")
@@ -74,14 +80,22 @@ def create_performance_comparison_table(
         table.add_row(*row)
     
     # Add improvement row if we have baseline
-    if cleir_metrics:
-        table.add_row("", "", "", "")  # Empty row for spacing
-        table.add_row(
-            "[bold]Sharpe Improvement[/bold]",
-            f"[bold green]+{((ml_metrics['sharpe_ratio'] / cleir_metrics['sharpe_ratio']) - 1) * 100:.1f}%[/bold green]",
-            "—",
-            "—" if spy_metrics else None
-        )
+    if cleir_metrics and cleir_metrics.get('sharpe_ratio', 0) != 0:
+        # Build the row based on number of columns
+        empty_row = [""] * (2 + (1 if cleir_metrics else 0) + (1 if spy_metrics else 0))
+        table.add_row(*empty_row)  # Empty row for spacing
+        
+        # Build improvement row
+        improvement_row = ["[bold]Sharpe Improvement[/bold]"]
+        improvement_pct = ((ml_metrics.get('sharpe_ratio', 0) / cleir_metrics['sharpe_ratio']) - 1) * 100
+        improvement_row.append(f"[bold green]+{improvement_pct:.1f}%[/bold green]")
+        
+        if cleir_metrics:
+            improvement_row.append("—")
+        if spy_metrics:
+            improvement_row.append("—")
+            
+        table.add_row(*improvement_row)
     
     return table
 
@@ -138,18 +152,22 @@ def calculate_spy_metrics(start_date: str = '2020-01-01', end_date: str = '2024-
             return {}
         
         # Calculate returns
-        # Handle different column names
+        # Handle different column names and ensure we get a Series
         if 'Adj Close' in spy.columns:
-            price_col = 'Adj Close'
+            prices = spy['Adj Close']
         elif 'Close' in spy.columns:
-            price_col = 'Close'
+            prices = spy['Close']
         else:
-            price_col = spy.columns[0]
+            prices = spy.iloc[:, 0]  # Get first column
         
-        spy_returns = spy[price_col].pct_change().dropna()
+        # Ensure we have a Series, not a DataFrame
+        if isinstance(prices, pd.DataFrame):
+            prices = prices.squeeze()
+        
+        spy_returns = prices.pct_change().dropna()
         
         # Calculate metrics
-        total_return = (spy[price_col].iloc[-1] / spy[price_col].iloc[0]) - 1
+        total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
         n_years = len(spy_returns) / 252
         annual_return = (1 + total_return) ** (1 / n_years) - 1
         volatility = spy_returns.std() * (252 ** 0.5)

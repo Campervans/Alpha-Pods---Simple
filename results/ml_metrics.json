@@ -1,0 +1,11 @@
+{
+  "ml_metrics": {
+    "total_return": 1.5563697851842755,
+    "annual_return": 0.2070334479218341,
+    "volatility": 0.18516334248329858,
+    "sharpe_ratio": 1.110020011980989,
+    "max_drawdown": -0.27081099553198096,
+    "avg_turnover": 0.510654918,
+    "total_transaction_costs": 0.010213098360000002
+  }
+}

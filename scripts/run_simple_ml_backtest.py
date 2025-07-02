@@ -5,6 +5,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 import pandas as pd
 import numpy as np
 import os
+import json
 from datetime import datetime
 
 from src.backtesting.alpha_engine import AlphaEnhancedBacktest
@@ -78,6 +79,22 @@ def main():
     # 3. Calculate and print performance metrics
     ml_metrics = ml_results.copy()
     
+    # Save metrics to JSON for GUI consumption
+    metrics_for_json = {
+        'ml_metrics': {
+            'total_return': float(ml_metrics['total_return']),
+            'annual_return': float(ml_metrics['annual_return']),
+            'volatility': float(ml_metrics['volatility']),
+            'sharpe_ratio': float(ml_metrics['sharpe_ratio']),
+            'max_drawdown': float(ml_metrics['max_drawdown']),
+            'avg_turnover': float(ml_metrics.get('avg_turnover', 0.0)),
+            'total_transaction_costs': float(ml_metrics.get('total_transaction_costs', 0.0))
+        }
+    }
+    
+    with open('results/ml_metrics.json', 'w') as f:
+        json.dump(metrics_for_json, f, indent=2)
+    
     print("\n" + "=" * 60)
     print("📈 ML-Enhanced Performance Summary")
     print("=" * 60)
@@ -86,6 +103,8 @@ def main():
     print(f"Volatility:      {ml_metrics['volatility']:>10.2%}")
     print(f"Sharpe Ratio:    {ml_metrics['sharpe_ratio']:>10.3f}")
     print(f"Max Drawdown:    {ml_metrics['max_drawdown']:>10.2%}")
+    print(f"Avg Turnover:    {ml_metrics.get('avg_turnover', 0):>10.2%}")
+    print(f"Total TC:        {ml_metrics.get('total_transaction_costs', 0):>10.2%}")
     
     if baseline_results is not None:
         print("\n" + "=" * 60)

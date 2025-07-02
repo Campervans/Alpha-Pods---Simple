@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 import os
 import pandas as pd
+import numpy as np
 from pyfiglet import Figlet
 from rich.style import Style
 from rich.console import Console
@@ -268,20 +269,59 @@ class CVaRGUI:
                             calculate_spy_metrics
                         )
                         
-                        # Parse ML results from the script output
+                        # Try to load ML metrics from JSON first
                         ml_metrics = {}
-                        output_lines = result.stdout.split('\n')
-                        for line in output_lines:
-                            if "Total Return:" in line:
-                                ml_metrics['total_return'] = float(line.split(':')[1].strip().rstrip('%')) / 100
-                            elif "Annual Return:" in line:
-                                ml_metrics['annual_return'] = float(line.split(':')[1].strip().rstrip('%')) / 100
-                            elif "Volatility:" in line:
-                                ml_metrics['volatility'] = float(line.split(':')[1].strip().rstrip('%')) / 100
-                            elif "Sharpe Ratio:" in line:
-                                ml_metrics['sharpe_ratio'] = float(line.split(':')[1].strip())
-                            elif "Max Drawdown:" in line:
-                                ml_metrics['max_drawdown'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                        json_path = Path(__file__).parent.parent.parent / 'results' / 'ml_metrics.json'
+                        
+                        if json_path.exists():
+                            try:
+                                with open(json_path, 'r') as f:
+                                    metrics_data = json.load(f)
+                                    ml_metrics = metrics_data.get('ml_metrics', {})
+                            except Exception as e:
+                                print(f"Error loading JSON metrics: {e}")
+                        
+                        # Fallback to parsing stdout if JSON not available
+                        if not ml_metrics:
+                            output_lines = result.stdout.split('\n')
+                            
+                            # Look for ML-Enhanced Performance Summary section
+                            in_ml_section = False
+                            for i, line in enumerate(output_lines):
+                                if "ML-Enhanced Performance Summary" in line:
+                                    in_ml_section = True
+                                    continue
+                                elif "Baseline Performance Summary" in line or "Performance Improvement" in line:
+                                    in_ml_section = False
+                                    
+                                if in_ml_section:
+                                    if "Total Return:" in line and 'total_return' not in ml_metrics:
+                                        try:
+                                            ml_metrics['total_return'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                                    elif "Annual Return:" in line and 'annual_return' not in ml_metrics:
+                                        try:
+                                            ml_metrics['annual_return'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                                    elif "Volatility:" in line and 'volatility' not in ml_metrics:
+                                        try:
+                                            ml_metrics['volatility'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                                    elif "Sharpe Ratio:" in line and 'sharpe_ratio' not in ml_metrics:
+                                        try:
+                                            ml_metrics['sharpe_ratio'] = float(line.split(':')[1].strip())
+                                        except:
+                                            pass
+                                    elif "Max Drawdown:" in line and 'max_drawdown' not in ml_metrics:
+                                        try:
+                                            ml_metrics['max_drawdown'] = float(line.split(':')[1].strip().rstrip('%')) / 100
+                                        except:
+                                            pass
+                        
+                        # Don't add default values - let table display "—" for missing metrics
                         
                         # Calculate SPY metrics
                         spy_metrics = calculate_spy_metrics(config['start_date'], config['end_date'])
@@ -335,6 +375,7 @@ class CVaRGUI:
                         # Show abbreviated output from script
                         if result.stdout:
                             # Extract key information from output
+                            output_lines = result.stdout.split('\n')
                             key_lines = []
                             for line in output_lines:
                                 if any(keyword in line for keyword in ['IC:', 'Rank stability:', 'Prediction Diagnostics']):
