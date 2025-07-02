@@ -37,6 +37,14 @@ Find the raw scripts in the src > optimization folder.
 
 ## Results
 
+**Task A**
+
+![CLEIR Index Performance](results/cleir_index_performance_analysis.png)
+
+**Task B**
+
+![SHAP Aggregated Analysis](results/ml_shap_analysis_aggregated.png)
+
 The backtesting scripts generate the following files in the `results/` directory:
 
 *   `baseline_cvar_index.csv`: Daily index values for the baseline CVaR strategy.
