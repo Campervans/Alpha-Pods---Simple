@@ -1,4 +1,4 @@
-"""Main terminal GUI application."""
+"""Main terminal GUI app."""
 
 import sys
 from pathlib import Path
@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
-# Add parent directory to path
+# add parent dir to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.gui.components import (
@@ -28,7 +28,7 @@ from rich.text import Text
 
 
 class CVaRGUI:
-    """Main GUI application class."""
+    """Main GUI app class."""
     
     def __init__(self):
         self.data_controller = DataController()
@@ -37,21 +37,21 @@ class CVaRGUI:
         self.running = True
     
     def run(self):
-        """Main application loop."""
+        """main app loop."""
         while self.running:
             clear_screen()
             self.show_main_menu()
     
     def show_main_menu(self):
-        """Display main menu."""
-        # Create ASCII banner
+        """display main menu."""
+        # create ASCII banner
         figlet = Figlet(font='standard', justify='center')
         ascii_banner = figlet.renderText('eToro Alpha Pod')
         
-        # eToro green color style
-        etoro_green = Style(color="#6ebe44")  # eToro brand green
+        # eToro green color
+        etoro_green = Style(color="#6ebe44")
         
-        # Print the banner in eToro green
+        # print banner in eToro green
         console.print(ascii_banner, style=etoro_green)
         
         console.print(create_header(
@@ -88,11 +88,11 @@ class CVaRGUI:
             show_info("Goodbye!")
     
     def data_management_menu(self):
-        """Data management submenu."""
+        """data management submenu."""
         clear_screen()
         console.print(create_header("Data Management"))
         
-        # Show cached tickers
+        # show cached tickers
         cached = self.data_controller.get_cached_tickers()
         if cached:
             show_info(f"Cached tickers: {', '.join(cached[:10])}{'...' if len(cached) > 10 else ''}")
@@ -121,15 +121,15 @@ class CVaRGUI:
             return
     
     def download_sp100_data(self):
-        """Download S&P 100 data."""
+        """download S&P 100 data."""
         clear_screen()
         console.print(create_header("Download S&P 100 Data"))
         
-        # Get date range
+        # get date range
         start_date = get_text_input("Start date (YYYY-MM-DD)", default="2009-07-01")
         end_date = get_text_input("End date (YYYY-MM-DD)", default="2024-12-31")
         
-        # Get S&P 100 tickers
+        # get S&P 100 tickers
         tickers = self.data_controller.get_universe_list()
         show_info(f"Will download {len(tickers)} tickers")
         
@@ -151,11 +151,12 @@ class CVaRGUI:
         console.input("\nPress Enter to continue...")
     
     def run_cvar_optimization(self):
-        """Run CVaR optimization."""
+        """run CVaR optimization."""
         clear_screen()
         console.print(create_header("CVaR Optimization"))
         
-        # Get parameters
+        # get parameters
+        # TODO: maybe add validation for these inputs
         config = {
             'n_stocks': int(get_text_input("Number of stocks", default="60")),
             'confidence_level': float(get_text_input("Confidence level", default="0.95")),
@@ -166,7 +167,7 @@ class CVaRGUI:
             'transaction_cost': float(get_text_input("Transaction cost (bps)", default="10"))
         }
         
-        # Show config summary
+        # show config summary
         console.print("\n")
         console.print(create_data_table("Configuration", config))
         
@@ -179,7 +180,7 @@ class CVaRGUI:
             if result['success']:
                 show_success("Optimization completed!")
                 
-                # Show results summary
+                # show results summary
                 console.print("\n[bold cyan]CVaR Optimization Results:[/bold cyan]")
                 results_table = Table(show_header=False, box=box.SIMPLE)
                 results_table.add_column("Metric", style="dim")
@@ -211,7 +212,7 @@ class CVaRGUI:
         clear_screen()
         console.print(create_header("ML-Enhanced CLEIR (Alpha Overlay)"))
         
-        # Show information about the ML enhancement
+        # show info about the ML enhancement
         info_text = Text()
         info_text.append("This feature enhances the CLEIR optimization with machine learning:\n\n", style="bold")
         info_text.append("• Uses Ridge regression to predict 3-month returns\n")

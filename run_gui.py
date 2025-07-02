@@ -2,8 +2,8 @@
 """
 CVaR/CLEIR Portfolio Optimization GUI
 
-Run this script to launch the terminal GUI.
-It will automatically install dependencies if needed.
+launch the terminal GUI
+installs deps if needed
 """
 
 import os

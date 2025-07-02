@@ -1,8 +1,8 @@
 """
-Universe selection functionality.
+Universe selection stuff.
 
-This module handles the selection of investment universe based on liquidity
-and other criteria from a larger set of available securities.
+handles selection of investment universe based on liquidity
+and other criteria from a larger set of securities.
 """
 
 import pandas as pd
@@ -17,23 +17,22 @@ def calculate_liquidity_scores(price_data: PriceData, config: UniverseConfig) ->
     Calculate average dollar volume for each ticker.
     
     Args:
-        price_data: PriceData object containing prices and volumes
-        config: UniverseConfig with parameters for liquidity calculation
+        price_data: PriceData object with prices and volumes
+        config: UniverseConfig with params for liquidity calculation
         
     Returns:
         Series with liquidity scores for each ticker
         
     Example:
         >>> scores = calculate_liquidity_scores(price_data, config)
-        >>> scores.sort_values(ascending=False).head()
     """
     if price_data.volumes is None:
-        raise ValueError("Volume data is required for liquidity calculation")
+        raise ValueError("Volume data required for liquidity calculation")
     
-    # Calculate dollar volume (price * volume)
+    # calc dollar volume (price * volume)
     dollar_volumes = price_data.prices * price_data.volumes
     
-    # Calculate rolling average over lookback period
+    # calc rolling average over lookback period
     if config.metric == "dollar_volume":
         liquidity_metric = dollar_volumes
     elif config.metric == "volume":
@@ -41,16 +40,16 @@ def calculate_liquidity_scores(price_data: PriceData, config: UniverseConfig) ->
     else:
         raise ValueError(f"Unsupported liquidity metric: {config.metric}")
     
-    # Use the last N days for calculation
+    # use the last N days for calculation
     if len(liquidity_metric) >= config.lookback_days:
         recent_data = liquidity_metric.tail(config.lookback_days)
     else:
         recent_data = liquidity_metric
     
-    # Calculate mean liquidity score for each ticker
+    # calc mean liquidity score for each ticker
     liquidity_scores = recent_data.mean()
     
-    # Handle any NaN values
+    # handle NaNs
     liquidity_scores = liquidity_scores.fillna(0)
     
     return liquidity_scores
@@ -58,14 +57,14 @@ def calculate_liquidity_scores(price_data: PriceData, config: UniverseConfig) ->
 
 def apply_universe_filters(price_data: PriceData, config: UniverseConfig) -> Tuple[List[str], pd.DataFrame]:
     """
-    Apply universe selection filters to identify valid tickers.
+    Apply universe selection filters to find valid tickers.
     
     Args:
-        price_data: PriceData object containing prices and volumes
-        config: UniverseConfig with filtering parameters
+        price_data: PriceData object with prices and volumes
+        config: UniverseConfig with filtering params
         
     Returns:
-        Tuple of (valid_tickers, filter_results_df)
+        (valid_tickers, filter_results_df)
         
     Example:
         >>> valid_tickers, results = apply_universe_filters(price_data, config)
@@ -76,7 +75,7 @@ def apply_universe_filters(price_data: PriceData, config: UniverseConfig) -> Tup
         ticker_prices = price_data.prices[ticker]
         ticker_volumes = price_data.volumes[ticker] if price_data.volumes is not None else None
         
-        # Initialize filter results
+        # init filter results
         filters = {
             'ticker': ticker,
             'min_price_filter': True,
@@ -87,17 +86,17 @@ def apply_universe_filters(price_data: PriceData, config: UniverseConfig) -> Tup
             'avg_volume': ticker_volumes.mean() if ticker_volumes is not None else 0
         }
         
-        # Filter 1: Minimum price filter
+        # filter 1: min price
         if filters['final_price'] < config.min_price:
             filters['min_price_filter'] = False
         
-        # Filter 2: Minimum trading days filter
+        # filter 2: min trading days
         recent_data = ticker_prices.tail(config.lookback_days)
         valid_days = len(recent_data.dropna())
         if valid_days < config.min_trading_days:
             filters['min_trading_days_filter'] = False
         
-        # Filter 3: Valid data filter (no zeros, reasonable values)
+        # filter 3: valid data (no zeros, reasonable values)
         if (ticker_prices <= 0).any() or ticker_prices.isnull().any():
             filters['valid_data_filter'] = False
         
@@ -109,10 +108,10 @@ def apply_universe_filters(price_data: PriceData, config: UniverseConfig) -> Tup
         
         results.append(filters)
     
-    # Convert to DataFrame for analysis
+    # convert to DataFrame for analysis
     results_df = pd.DataFrame(results)
     
-    # Get list of valid tickers
+    # get list of valid tickers
     valid_tickers = results_df[results_df['passes_all_filters']]['ticker'].tolist()
     
     print(f"Universe filtering results:")
@@ -131,13 +130,13 @@ def select_liquid_universe(sp100_tickers: List[str], config: UniverseConfig,
     Select top N most liquid stocks from S&P 100.
     
     Args:
-        sp100_tickers: List of S&P 100 ticker symbols
-        config: UniverseConfig with selection parameters
-        start_date: Start date for liquidity calculation
-        end_date: End date for liquidity calculation
+        sp100_tickers: list of S&P 100 tickers
+        config: UniverseConfig with selection params
+        start_date: start date for liquidity calc
+        end_date: end date for liquidity calc
         
     Returns:
-        List of selected ticker symbols
+        list of selected tickers
         
     Example:
         >>> tickers = create_sp100_list()
@@ -146,7 +145,7 @@ def select_liquid_universe(sp100_tickers: List[str], config: UniverseConfig,
     """
     print(f"Selecting {config.n_stocks} most liquid stocks from {len(sp100_tickers)} candidates")
     
-    # Download recent data for liquidity analysis
+    # download recent data for liquidity analysis
     try:
         price_data = download_universe(
             sp100_tickers, 
@@ -156,11 +155,11 @@ def select_liquid_universe(sp100_tickers: List[str], config: UniverseConfig,
         )
     except Exception as e:
         print(f"Error downloading data for universe selection: {e}")
-        # Fallback to first N tickers if download fails
+        # fallback to first N tickers if download fails
         print(f"Using first {config.n_stocks} tickers as fallback")
         return sp100_tickers[:config.n_stocks]
     
-    # Apply universe filters
+    # apply universe filters
     valid_tickers, filter_results = apply_universe_filters(price_data, config)
     
     if len(valid_tickers) < config.n_stocks:
@@ -168,7 +167,7 @@ def select_liquid_universe(sp100_tickers: List[str], config: UniverseConfig,
               f"requested {config.n_stocks}")
         return valid_tickers
     
-    # Calculate liquidity scores for valid tickers
+    # calculate liquidity scores for valid tickers
     valid_price_data = PriceData(
         tickers=valid_tickers,
         dates=price_data.dates,
@@ -178,7 +177,7 @@ def select_liquid_universe(sp100_tickers: List[str], config: UniverseConfig,
     
     liquidity_scores = calculate_liquidity_scores(valid_price_data, config)
     
-    # Select top N most liquid tickers
+    # select top N most liquid tickers
     top_liquid_tickers = liquidity_scores.nlargest(config.n_stocks).index.tolist()
     
     print(f"Selected universe statistics:")
@@ -191,17 +190,16 @@ def select_liquid_universe(sp100_tickers: List[str], config: UniverseConfig,
 
 def create_equal_weight_universe(tickers: List[str]) -> np.ndarray:
     """
-    Create equal weight portfolio from universe.
+    Create equal weight portfolio.
     
     Args:
-        tickers: List of ticker symbols
+        tickers: list of tickers
         
     Returns:
-        Array of equal weights
+        array of equal weights
         
     Example:
         >>> weights = create_equal_weight_universe(['AAPL', 'MSFT', 'GOOGL'])
-        >>> weights  # [0.333, 0.333, 0.333]
     """
     n_assets = len(tickers)
     if n_assets == 0:
@@ -212,14 +210,14 @@ def create_equal_weight_universe(tickers: List[str]) -> np.ndarray:
 
 def create_market_cap_weights(price_data: PriceData, shares_outstanding: Optional[Dict[str, float]] = None) -> np.ndarray:
     """
-    Create market cap weighted portfolio (if shares data is available).
+    Create market cap weighted portfolio.
     
     Args:
         price_data: PriceData object
-        shares_outstanding: Optional dictionary mapping ticker to shares outstanding
+        shares_outstanding: optional dict mapping ticker to shares outstanding
         
     Returns:
-        Array of market cap weights (or equal weights if shares data unavailable)
+        array of market cap weights (or equal weights if no shares data)
         
     Example:
         >>> shares = {'AAPL': 16e9, 'MSFT': 7.4e9}
@@ -229,7 +227,7 @@ def create_market_cap_weights(price_data: PriceData, shares_outstanding: Optiona
         print("No shares outstanding data provided, using equal weights")
         return create_equal_weight_universe(price_data.tickers)
     
-    # Calculate market caps using latest prices
+    # calculate market caps using latest prices
     latest_prices = price_data.prices.iloc[-1]
     market_caps = {}
     
@@ -238,9 +236,9 @@ def create_market_cap_weights(price_data: PriceData, shares_outstanding: Optiona
             market_caps[ticker] = latest_prices[ticker] * shares_outstanding[ticker]
         else:
             print(f"No shares data for {ticker}, using equal weight proxy")
-            market_caps[ticker] = latest_prices[ticker] * 1e9  # Proxy value
+            market_caps[ticker] = latest_prices[ticker] * 1e9  # proxy value
     
-    # Convert to weights
+    # convert to weights
     total_market_cap = sum(market_caps.values())
     weights = np.array([market_caps[ticker] / total_market_cap for ticker in price_data.tickers])
     
@@ -260,7 +258,6 @@ def analyze_universe_characteristics(price_data: PriceData, config: UniverseConf
         
     Example:
         >>> analysis = analyze_universe_characteristics(price_data, config)
-        >>> print(analysis)
     """
     analysis_data = []
     
@@ -268,10 +265,10 @@ def analyze_universe_characteristics(price_data: PriceData, config: UniverseConf
         ticker_prices = price_data.prices[ticker]
         ticker_volumes = price_data.volumes[ticker] if price_data.volumes is not None else None
         
-        # Calculate returns
+        # calculate returns
         returns = ticker_prices.pct_change().dropna()
         
-        # Calculate statistics
+        # calculate stats
         stats = {
             'ticker': ticker,
             'start_price': ticker_prices.iloc[0],
@@ -289,7 +286,7 @@ def analyze_universe_characteristics(price_data: PriceData, config: UniverseConf
     
     analysis_df = pd.DataFrame(analysis_data)
     
-    # Add summary statistics
+    # add summary stats
     print(f"\nUniverse Analysis Summary:")
     print(f"Number of assets: {len(analysis_df)}")
     print(f"Average annualized return: {analysis_df['annualized_return'].mean():.2%}")
@@ -302,21 +299,21 @@ def analyze_universe_characteristics(price_data: PriceData, config: UniverseConf
 
 def calculate_max_drawdown_simple(prices: pd.Series) -> float:
     """
-    Simple maximum drawdown calculation for individual assets.
+    Simple max drawdown calc for individual assets.
     
     Args:
-        prices: Series of asset prices
+        prices: series of asset prices
         
     Returns:
-        Maximum drawdown as a positive percentage
+        max drawdown as a positive percentage
     """
     if len(prices) == 0:
         return 0.0
     
-    # Calculate running maximum
+    # calculate running max
     running_max = prices.expanding().max()
     
-    # Calculate drawdown
+    # calculate drawdown
     drawdown = (prices - running_max) / running_max
     
     return abs(drawdown.min())
@@ -327,29 +324,29 @@ def save_universe_selection_results(tickers: List[str],
                                    liquidity_scores: pd.Series,
                                    filepath: str):
     """
-    Save universe selection results to Excel file.
+    Save universe selection results to Excel.
     
     Args:
-        tickers: Selected ticker symbols
+        tickers: selected tickers
         filter_results: DataFrame with filter results
         liquidity_scores: Series with liquidity scores
-        filepath: Path to save Excel file
+        filepath: path to save Excel file
         
     Example:
         >>> save_universe_selection_results(tickers, results, scores, 'universe_selection.xlsx')
     """
     with pd.ExcelWriter(filepath, engine='xlsxwriter') as writer:
-        # Sheet 1: Selected universe
+        # sheet 1: selected universe
         selected_df = pd.DataFrame({'ticker': tickers})
         selected_df['rank'] = range(1, len(tickers) + 1)
         if len(liquidity_scores) > 0:
             selected_df['liquidity_score'] = [liquidity_scores.get(ticker, 0) for ticker in tickers]
         selected_df.to_excel(writer, sheet_name='Selected_Universe', index=False)
         
-        # Sheet 2: Filter results
+        # sheet 2: filter results
         filter_results.to_excel(writer, sheet_name='Filter_Results', index=False)
         
-        # Sheet 3: All liquidity scores
+        # sheet 3: all liquidity scores
         if len(liquidity_scores) > 0:
             liquidity_df = liquidity_scores.reset_index()
             liquidity_df.columns = ['ticker', 'liquidity_score']
@@ -365,11 +362,11 @@ def load_universe_from_file(filepath: str, sheet_name: str = 'Selected_Universe'
     Load universe selection from Excel file.
     
     Args:
-        filepath: Path to Excel file
-        sheet_name: Name of the sheet containing tickers
+        filepath: path to Excel file
+        sheet_name: name of sheet with tickers
         
     Returns:
-        List of ticker symbols
+        list of tickers
         
     Example:
         >>> tickers = load_universe_from_file('universe_selection.xlsx')
@@ -389,35 +386,35 @@ def validate_universe_selection(tickers: List[str],
                                min_correlation: float = 0.3,
                                max_correlation: float = 0.9) -> Dict[str, any]:
     """
-    Validate the selected universe for diversification and other criteria.
+    Validate the selected universe for diversification.
     
     Args:
-        tickers: Selected ticker symbols
+        tickers: selected tickers
         price_data: PriceData object
-        min_correlation: Minimum acceptable average correlation
-        max_correlation: Maximum acceptable average correlation
+        min_correlation: min acceptable avg correlation
+        max_correlation: max acceptable avg correlation
         
     Returns:
-        Dictionary with validation results
+        dict with validation results
         
     Example:
         >>> validation = validate_universe_selection(tickers, price_data)
     """
-    # Calculate correlation matrix
+    # calculate correlation matrix
     returns = price_data.get_returns()
     correlation_matrix = returns.corr()
     
-    # Calculate average pairwise correlation
+    # calculate avg pairwise correlation
     n_assets = len(tickers)
     if n_assets <= 1:
         avg_correlation = 0.0
     else:
-        # Get upper triangle of correlation matrix (excluding diagonal)
+        # get upper triangle of correlation matrix (w/o diagonal)
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
         correlations = correlation_matrix.values[mask]
         avg_correlation = np.mean(correlations)
     
-    # Check concentration (max weight if equal weighted)
+    # check concentration (max weight if equal weighted)
     max_weight = 1.0 / n_assets if n_assets > 0 else 0.0
     
     validation_results = {
@@ -425,13 +422,13 @@ def validate_universe_selection(tickers: List[str],
         'avg_correlation': avg_correlation,
         'max_weight_equal': max_weight,
         'correlation_warning': avg_correlation > max_correlation or avg_correlation < min_correlation,
-        'concentration_warning': max_weight > 0.1,  # Warning if any asset > 10%
+        'concentration_warning': max_weight > 0.1,  # warning if any asset > 10%
         'sufficient_diversification': n_assets >= 30,
         'date_range_days': len(price_data.dates),
         'validation_passed': True
     }
     
-    # Overall validation
+    # overall validation
     if (validation_results['correlation_warning'] or 
         validation_results['concentration_warning'] or 
         not validation_results['sufficient_diversification']):
@@ -447,20 +444,20 @@ def validate_universe_selection(tickers: List[str],
 
 
 def get_ml_universe() -> List[str]:
-    """Get the 60-stock universe for ML-enhanced strategies.
+    """Get the 60-stock universe for ML strategies.
     
-    These are the 60 most liquid stocks from S&P 100 that have
-    consistent data availability from 2010-2024. This universe
-    is used for both Task A and Task B to ensure consistency.
+    these are the 60 most liquid stocks from S&P 100 with
+    consistent data from 2010-2024. this universe is used
+    for both Task A and B for consistency.
     
     Returns:
-        List of 60 ticker symbols
+        list of 60 tickers
         
     Note:
-        This list was curated based on liquidity and data availability
-        analysis performed in the baseline implementation.
+        this list was curated based on liquidity and data availability analysis.
+        TODO: maybe this should be generated dynamically instead of hardcoded.
     """
-    # Remember: Keep it simple - this is the same universe used across the project
+    # keep it simple - same universe used across the project
     return [
         'AAPL', 'ABBV', 'ACN', 'ADBE', 'ADI', 'ADP', 'AMGN', 'AMZN', 'APH', 'AVGO',
         'AXP', 'BAC', 'BKNG', 'BLK', 'BRK-B', 'CAT', 'CMCSA', 'COST', 'CRM', 'CVX',

@@ -17,7 +17,7 @@ console = Console()
 
 
 def create_header(title: str, subtitle: str = "") -> Panel:
-    """Create a styled header panel."""
+    """create a styled header panel."""
     content = Text(title, style="bold cyan", justify="center")
     if subtitle:
         content.append(f"\n{subtitle}", style="dim")
@@ -25,7 +25,7 @@ def create_header(title: str, subtitle: str = "") -> Panel:
 
 
 def create_menu(title: str, options: List[str]) -> str:
-    """Display a menu and get user choice."""
+    """display a menu and get user choice."""
     console.print(Panel(title, style="bold yellow"))
     
     table = Table(show_header=False, box=None)
@@ -43,22 +43,22 @@ def create_menu(title: str, options: List[str]) -> str:
 
 
 def show_error(message: str):
-    """Display an error message."""
+    """display an error message."""
     console.print(f"[bold red]✗ Error:[/bold red] {message}")
 
 
 def show_success(message: str):
-    """Display a success message."""
+    """display a success message."""
     console.print(f"[bold green]✓ Success:[/bold green] {message}")
 
 
 def show_info(message: str):
-    """Display an info message."""
+    """display an info message."""
     console.print(f"[bold blue]ℹ Info:[/bold blue] {message}")
 
 
 def create_progress_spinner(description: str):
-    """Create a progress spinner for long operations."""
+    """create a progress spinner for long ops."""
     return Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -67,13 +67,13 @@ def create_progress_spinner(description: str):
 
 
 def create_data_table(title: str, data: Dict[str, Any]) -> Table:
-    """Create a formatted table from dictionary data."""
+    """create a formatted table from a dict."""
     table = Table(title=title, show_header=True, header_style="bold magenta")
     table.add_column("Parameter", style="cyan")
     table.add_column("Value", style="white")
     
     for key, value in data.items():
-        # Format numbers nicely
+        # format numbers nicely
         if isinstance(value, float):
             value_str = f"{value:.4f}" if abs(value) < 100 else f"{value:.2f}"
         else:
@@ -84,26 +84,26 @@ def create_data_table(title: str, data: Dict[str, Any]) -> Table:
 
 
 def confirm_action(message: str) -> bool:
-    """Ask for user confirmation."""
+    """ask for user confirmation."""
     return Confirm.ask(message)
 
 
 def get_text_input(prompt: str, default: Optional[str] = None) -> str:
-    """Get text input from user."""
+    """get text input from user."""
     return Prompt.ask(prompt, default=default)
 
 
 def clear_screen():
-    """Clear the terminal screen."""
+    """clear the terminal screen."""
     console.clear()
 
 
 def create_file_tree(root_path: str, title: str = "Files") -> Tree:
-    """Create a file tree visualization."""
+    """create a file tree visualization."""
     tree = Tree(f"📁 {title}", style="bold cyan")
     
     def add_directory(parent_node, path: Path, max_depth: int = 3, current_depth: int = 0):
-        """Recursively add directories and files to tree."""
+        """recursively add directories and files to tree."""
         if current_depth >= max_depth:
             return
             
@@ -112,18 +112,18 @@ def create_file_tree(root_path: str, title: str = "Files") -> Tree:
             dirs = [item for item in items if item.is_dir()]
             files = [item for item in items if item.is_file()]
             
-            # Add directories first
+            # add dirs first
             for dir_item in dirs:
                 if dir_item.name.startswith('.'):
                     continue
                 dir_node = parent_node.add(f"📁 {dir_item.name}/", style="cyan")
                 add_directory(dir_node, dir_item, max_depth, current_depth + 1)
             
-            # Then add files
+            # then add files
             for file_item in files:
                 if file_item.name.startswith('.'):
                     continue
-                # Choose icon based on file extension
+                # choose icon based on extension
                 if file_item.suffix == '.csv':
                     icon = "📊"
                     style = "green"
@@ -137,7 +137,7 @@ def create_file_tree(root_path: str, title: str = "Files") -> Tree:
                     icon = "📄"
                     style = "dim"
                 
-                # Add file size
+                # add file size
                 size = file_item.stat().st_size
                 if size < 1024:
                     size_str = f"{size}B"
@@ -156,31 +156,31 @@ def create_file_tree(root_path: str, title: str = "Files") -> Tree:
 
 
 def create_interactive_file_tree(root_path: str, title: str = "Files") -> Optional[str]:
-    """Create an interactive file tree where users can select files."""
+    """create an interactive file tree where users can select files."""
     from rich.table import Table
     
-    # Collect all files
+    # collect all files
     files_list = []
     
     def collect_files(path: Path, prefix: str = ""):
-        """Collect all files with their paths."""
+        """collect all files with their paths."""
         try:
             items = sorted(path.iterdir())
             dirs = [item for item in items if item.is_dir()]
             files = [item for item in items if item.is_file()]
             
-            # Process directories first
+            # process dirs first
             for dir_item in dirs:
                 if dir_item.name.startswith('.'):
                     continue
                 collect_files(dir_item, prefix + dir_item.name + "/")
             
-            # Then process files
+            # then process files
             for file_item in files:
                 if file_item.name.startswith('.'):
                     continue
                     
-                # Choose icon based on file extension
+                # choose icon based on extension
                 if file_item.suffix == '.csv':
                     icon = "📊"
                 elif file_item.suffix == '.png':
@@ -190,7 +190,7 @@ def create_interactive_file_tree(root_path: str, title: str = "Files") -> Option
                 else:
                     icon = "📄"
                 
-                # Get file size
+                # get file size
                 size = file_item.stat().st_size
                 if size < 1024:
                     size_str = f"{size}B"
@@ -215,7 +215,7 @@ def create_interactive_file_tree(root_path: str, title: str = "Files") -> Option
         show_info("No files found in directory")
         return None
     
-    # Create a table with numbered files
+    # create a table with numbered files
     table = Table(title=f"📁 {title} - Select a file", show_header=True)
     table.add_column("#", style="cyan", width=4)
     table.add_column("File", style="white")
@@ -226,10 +226,10 @@ def create_interactive_file_tree(root_path: str, title: str = "Files") -> Option
     
     console.print(table)
     
-    # Add option to go back
+    # add option to go back
     console.print(f"\n[{len(files_list) + 1}] Back to menu", style="yellow")
     
-    # Get user choice
+    # get user choice
     choices = [str(i) for i in range(1, len(files_list) + 2)]
     choice = Prompt.ask("\nSelect file to view", choices=choices)
     

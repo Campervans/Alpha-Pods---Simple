@@ -15,17 +15,17 @@ import requests
 
 from ..utils.schemas import PriceData
 
-# PROXY CONFIGURATION - CREDENTIALS ARE INTENTIONALLY HARDCODED, DO NOT CHANGE
+# PROXY CONFIG - creds are hardcoded, don't change
 PROXY_USERNAME = 'sp7lr99xhd'
 PROXY_PASSWORD = '7Xtywa2k3o0oxoViLX'
 
-# Load proxy ports from CSV - now supports 100 proxies instead of hardcoded 30
+# load proxy ports from csv
 from ..utils.proxy_utils import load_proxies_from_csv
 PROXY_PORTS = load_proxies_from_csv()
 
 
 def get_random_proxy():
-    """Get a random proxy from the list."""
+    """get a random proxy."""
     port = random.choice(PROXY_PORTS)
     proxy = f"http://{PROXY_USERNAME}:{PROXY_PASSWORD}@dc.decodo.com:{port}"
     return {
@@ -35,7 +35,7 @@ def get_random_proxy():
 
 
 def test_proxy(proxy_dict):
-    """Test if a proxy is working."""
+    """test if a proxy works."""
     try:
         response = requests.get('https://ip.decodo.com/json', 
                               proxies=proxy_dict, 
@@ -48,31 +48,30 @@ def test_proxy(proxy_dict):
 def download_single_ticker(ticker: str, start: str, end: str, 
                           retry_count: int = 3, delay: float = 1.0,
                           use_cache: bool = True, cache_dir: str = "data/raw") -> pd.DataFrame:
-    # download one ticker with retries and rate limit handling
+    # download one ticker with retries & rate limit handling
     
-    # STEP 2: Smart cache check with validation
+    # smart cache check
     if use_cache:
-        # No longer need complex validation, pickle format preserves data types
+        # pickle format preserves data types, no complex validation needed
         cached_df = load_ticker_data_from_pickle(ticker, cache_dir)
         
         if cached_df is not None:
-            # Check if the cached data covers the requested date range
+            # check if cached data covers requested date range
             start_date = pd.to_datetime(start)
             end_date = pd.to_datetime(end)
             
-            # Ensure index is a DatetimeIndex before proceeding
+            # make sure index is a DatetimeIndex
             if isinstance(cached_df.index, pd.DatetimeIndex):
-                # More flexible date range check - allow for market holidays at start
-                # Check if cache covers the requested period (with some tolerance for holidays)
+                # allow for holidays at start
                 cache_start = cached_df.index[0]
                 cache_end = cached_df.index[-1]
                 
-                # Allow up to 5 days difference at start (for holidays/weekends)
+                # allow up to 5 days diff at start
                 start_ok = cache_start <= start_date + pd.Timedelta(days=5)
                 end_ok = cache_end >= end_date - pd.Timedelta(days=5)
                 
                 if not cached_df.empty and start_ok and end_ok:
-                    # Filter to the exact requested date range
+                    # filter to exact date range
                     mask = (cached_df.index >= start_date) & (cached_df.index <= end_date)
                     filtered_data = cached_df.loc[mask]
                     
@@ -80,30 +79,30 @@ def download_single_ticker(ticker: str, start: str, end: str,
                         print(f"✓ {ticker} loaded from pickle cache ({len(filtered_data)} days)")
                         return filtered_data
             else:
-                print(f"⚠️  {ticker}: Cached data has an invalid index type, re-downloading.")
+                print(f"⚠️  {ticker}: cached data has invalid index type, re-downloading.")
     
-    # If cache miss or invalid, proceed with download
-    # Save original proxy environment variables
+    # if cache miss, proceed with download
+    # save original proxy env vars
     original_http_proxy = os.environ.get('HTTP_PROXY', '')
     original_https_proxy = os.environ.get('HTTPS_PROXY', '')
     
-    # Try with different proxies first, then fallback to no proxy
-    proxy_attempts = min(5, len(PROXY_PORTS))  # Try up to 5 different proxies
+    # try with different proxies, then fallback to no proxy
+    proxy_attempts = min(5, len(PROXY_PORTS))
     
     for proxy_attempt in range(proxy_attempts + 1):  # +1 for no-proxy attempt
         if proxy_attempt < proxy_attempts:
-            # Try with a proxy
+            # try with a proxy
             proxy_dict = get_random_proxy()
             proxy_url = proxy_dict['http']
             proxy_info = f"proxy port {proxy_url.split(':')[-1]}"
             
-            # Set environment variables for proxy
+            # set env vars for proxy
             os.environ['HTTP_PROXY'] = proxy_url
             os.environ['HTTPS_PROXY'] = proxy_url
-            os.environ['http_proxy'] = proxy_url  # Some systems use lowercase
+            os.environ['http_proxy'] = proxy_url
             os.environ['https_proxy'] = proxy_url
         else:
-            # Last attempt without proxy - clear proxy env vars
+            # last attempt without proxy
             os.environ['HTTP_PROXY'] = ''
             os.environ['HTTPS_PROXY'] = ''
             os.environ['http_proxy'] = ''
@@ -116,11 +115,11 @@ def download_single_ticker(ticker: str, start: str, end: str,
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     
-                # Add delay between requests to avoid rate limiting
+                # delay between requests to avoid rate limiting
                 if attempt > 0 or proxy_attempt > 0:
-                    time.sleep(delay * (attempt + 1))  # Exponential backoff
+                    time.sleep(delay * (attempt + 1))
                     
-                # Let yfinance handle the session internally
+                # let yfinance handle session
                 try:
                     df = yf.download(
                         ticker, 
@@ -140,31 +139,23 @@ def download_single_ticker(ticker: str, start: str, end: str,
                     print(f"{'='*60}\n")
                     raise
                 
-                # Debug print to see what we got (commented out for production)
-                # if hasattr(df, 'shape'):
-                #     print(f"Downloaded {ticker}: shape={df.shape}, empty={df.empty}")
-                #     if hasattr(df, 'columns'):
-                #         print(f"Columns type: {type(df.columns)}, values: {list(df.columns)[:5] if len(df.columns) > 0 else 'empty'}")
-                
                 if df.empty:
                     if attempt < retry_count - 1:
                         time.sleep(delay)
                         continue
-                    # Try next proxy
+                    # try next proxy
                     break
                 
-                # Handle multi-level columns (when ticker is in column names)
+                # handle multi-level columns
                 if isinstance(df.columns, pd.MultiIndex):
-                    # print(f"{ticker} has MultiIndex columns: levels={df.columns.levels}")
-                    # More robust handling
                     if len(df.columns.levels) > 1 and ticker in df.columns.get_level_values(1):
-                        # If ticker is in the second level, select it
+                        # if ticker is in second level, select it
                         df = df.xs(ticker, level=1, axis=1)
                     elif len(set(df.columns.get_level_values(1))) == 1:
-                        # If only one ticker in second level, just drop it
+                        # if only one ticker in second level, drop it
                         df.columns = df.columns.droplevel(1)
                     else:
-                        # Try to extract just the price/volume data
+                        # try to extract just price/volume data
                         df.columns = df.columns.droplevel(1)
                 
                 # get close & volume
@@ -180,14 +171,14 @@ def download_single_ticker(ticker: str, start: str, end: str,
                     
                     # prices too
                     if (result['Close'] <= 0).any():
-                        print(f"X {ticker} has weird prices")  # happens sometimes with bad data
+                        print(f"X {ticker} has weird prices")
                         result = result[result['Close'] > 0]
                     
-                    # Success! Log which method worked
+                    # success!
                     if proxy_attempt < proxy_attempts:
                         print(f"✓ {ticker} downloaded successfully using {proxy_info}")
                     
-                    # Restore original proxy settings before returning
+                    # restore original proxy settings
                     os.environ['HTTP_PROXY'] = original_http_proxy
                     os.environ['HTTPS_PROXY'] = original_https_proxy
                     os.environ['http_proxy'] = original_http_proxy
@@ -198,30 +189,30 @@ def download_single_ticker(ticker: str, start: str, end: str,
                     if attempt < retry_count - 1:
                         time.sleep(delay)
                         continue
-                    # Try next proxy
+                    # try next proxy
                     break
                     
             except Exception as e:
                 error_msg = str(e)
                 if "429" in error_msg or "Too Many Requests" in error_msg:
-                    # Rate limit error - wait longer
-                    wait_time = delay * (2 ** (attempt + 1))  # Exponential backoff
+                    # rate limit error - wait longer
+                    wait_time = delay * (2 ** (attempt + 1))
                     print(f"Rate limit hit for {ticker} using {proxy_info}, waiting {wait_time}s...")
                     time.sleep(wait_time)
                     continue
                 elif attempt < retry_count - 1:
-                    # Other error - normal retry
+                    # other error - normal retry
                     time.sleep(delay)
                     continue
                 else:
-                    # Last attempt for this proxy failed, try next proxy
+                    # last attempt for this proxy failed
                     if proxy_attempt < proxy_attempts:
                         print(f"Failed {ticker} with {proxy_info}: {e}, trying different proxy...")
                     else:
                         print(f"Failed {ticker} with all methods: {e}")
                     break
     
-    # Restore original proxy settings before returning
+    # restore original proxy settings
     os.environ['HTTP_PROXY'] = original_http_proxy
     os.environ['HTTPS_PROXY'] = original_https_proxy
     os.environ['http_proxy'] = original_http_proxy
@@ -235,12 +226,12 @@ def download_multiple_tickers(tickers: List[str], start: str, end: str,
                             batch_delay: float = 0.5) -> Dict[str, pd.DataFrame]:
     """
     Download multiple tickers using yfinance's thread-safe batch downloading.
-    This avoids the race condition issues with yfinance's shared global dictionary.
+    avoids race condition issues with yfinance's shared global dict.
     """
     results = {}
     
-    # Process in smaller batches to avoid rate limiting
-    batch_size = 20  # Can use larger batches since yfinance handles threading internally
+    # process in smaller batches to avoid rate limiting
+    batch_size = 20
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         
@@ -248,23 +239,23 @@ def download_multiple_tickers(tickers: List[str], start: str, end: str,
             print(f"Processing batch {i//batch_size + 1}/{(len(tickers) + batch_size - 1)//batch_size}: {len(batch)} tickers")
         
         try:
-            # Use yfinance's built-in batch download which is thread-safe
+            # use yfinance's built-in batch download
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 
-                # Download all tickers in batch using yfinance's internal threading
+                # download all tickers in batch
                 batch_data = yf.download(
-                    batch,  # Pass list of tickers
+                    batch,
                     start=start,
                     end=end,
                     auto_adjust=True,
                     progress=progress_bar,
-                    group_by='ticker'  # Important: group by ticker to get separate columns
+                    group_by='ticker'
                 )
             
-            # Process the batch results
+            # process batch results
             if not batch_data.empty:
-                # Handle single ticker case (no MultiIndex)
+                # handle single ticker case
                 if len(batch) == 1:
                     ticker = batch[0]
                     if not batch_data.empty and 'Close' in batch_data.columns and 'Volume' in batch_data.columns:
@@ -280,11 +271,11 @@ def download_multiple_tickers(tickers: List[str], start: str, end: str,
                     else:
                         print(f"✗ {ticker}: Missing required columns")
                 
-                # Handle multiple tickers case (MultiIndex columns)
+                # handle multiple tickers case
                 elif isinstance(batch_data.columns, pd.MultiIndex):
                     for ticker in batch:
                         try:
-                            # Extract data for this ticker
+                            # extract data for this ticker
                             ticker_data = batch_data[ticker] if ticker in batch_data.columns.get_level_values(0) else None
                             
                             if ticker_data is not None and not ticker_data.empty:
@@ -313,7 +304,7 @@ def download_multiple_tickers(tickers: List[str], start: str, end: str,
                 
         except Exception as e:
             print(f"Error downloading batch {batch}: {e}")
-            # Fallback to individual downloads for this batch
+            # fallback to individual downloads for this batch
             print(f"Falling back to individual downloads for batch...")
             for ticker in batch:
                 try:
@@ -327,7 +318,7 @@ def download_multiple_tickers(tickers: List[str], start: str, end: str,
                 except Exception as fallback_e:
                     print(f"✗ {ticker}: Error in fallback - {fallback_e}")
         
-        # Delay between batches to avoid rate limiting
+        # delay between batches to avoid rate limiting
         if i + batch_size < len(tickers):
             time.sleep(batch_delay)
     
@@ -340,11 +331,11 @@ def align_data_by_dates(data_dict: Dict[str, pd.DataFrame],
     Align price and volume data across tickers by common dates.
     
     Args:
-        data_dict: Dictionary mapping ticker to DataFrame
-        min_data_points: Minimum number of data points required per ticker
+        data_dict: dict mapping ticker to DataFrame
+        min_data_points: min data points required per ticker
         
     Returns:
-        Tuple of (price_df, volume_df) with aligned dates
+        (price_df, volume_df) with aligned dates
         
     Example:
         >>> data_dict = {'AAPL': df1, 'MSFT': df2}
@@ -353,7 +344,7 @@ def align_data_by_dates(data_dict: Dict[str, pd.DataFrame],
     if not data_dict:
         return pd.DataFrame(), pd.DataFrame()
     
-    # Filter tickers with sufficient data
+    # filter tickers with enough data
     valid_tickers = [
         ticker for ticker, df in data_dict.items()
         if len(df) >= min_data_points
@@ -365,7 +356,7 @@ def align_data_by_dates(data_dict: Dict[str, pd.DataFrame],
     
     print(f"Using {len(valid_tickers)} tickers with sufficient data")
     
-    # Find common date range
+    # find common date range
     start_dates = [data_dict[ticker].index.min() for ticker in valid_tickers]
     end_dates = [data_dict[ticker].index.max() for ticker in valid_tickers]
     
@@ -374,28 +365,28 @@ def align_data_by_dates(data_dict: Dict[str, pd.DataFrame],
     
     print(f"Common date range: {common_start.date()} to {common_end.date()}")
     
-    # Create aligned DataFrames
+    # create aligned DataFrames
     price_data = {}
     volume_data = {}
     
     for ticker in valid_tickers:
         df = data_dict[ticker]
-        # Filter to common date range
+        # filter to common date range
         df_filtered = df[(df.index >= common_start) & (df.index <= common_end)]
         
         if len(df_filtered) >= min_data_points:
             price_data[ticker] = df_filtered['Close']
             volume_data[ticker] = df_filtered['Volume']
     
-    # Convert to DataFrames and align by index
+    # convert to DataFrames and align by index
     price_df = pd.DataFrame(price_data)
     volume_df = pd.DataFrame(volume_data)
     
-    # Forward fill missing values (holidays, etc.)
+    # ffill missing values (holidays, etc.)
     price_df = price_df.ffill()
-    volume_df = volume_df.fillna(0)  # Zero volume on missing days
+    volume_df = volume_df.fillna(0)
     
-    # Drop any remaining rows with missing data
+    # drop any remaining rows with missing data
     price_df = price_df.dropna()
     volume_df = volume_df.loc[price_df.index]
     
@@ -409,13 +400,13 @@ def download_universe(tickers: List[str], start: str, end: str,
     Download and validate price data for multiple tickers.
     
     Args:
-        tickers: List of ticker symbols
-        start: Start date in 'YYYY-MM-DD' format  
-        end: End date in 'YYYY-MM-DD' format
-        min_data_points: Minimum number of data points required per ticker
-        max_workers: Maximum number of parallel downloads
-        use_cache: Whether to use cached data if available
-        cache_dir: Directory to save/load cached data
+        tickers: list of ticker symbols
+        start: start date in 'YYYY-MM-DD'
+        end: end date in 'YYYY-MM-DD'
+        min_data_points: min data points required per ticker
+        max_workers: max number of parallel downloads
+        use_cache: whether to use cached data
+        cache_dir: directory to save/load cached data
         
     Returns:
         PriceData object with validated and aligned data
@@ -429,24 +420,24 @@ def download_universe(tickers: List[str], start: str, end: str,
     data_dict = {}
     tickers_to_download = []
     
-    # Check cache first if enabled
+    # check cache first if enabled
     if use_cache:
         print(f"Checking cache in {cache_dir}...")
         for ticker in tickers:
             cached_data = load_ticker_data_from_pickle(ticker, cache_dir)
             if cached_data is not None:
-                # Check if cached data covers the requested period (with tolerance for holidays)
+                # check if cached data covers the requested period
                 start_date = pd.to_datetime(start)
                 end_date = pd.to_datetime(end)
                 cache_start = cached_data.index[0]
                 cache_end = cached_data.index[-1]
                 
-                # Allow up to 5 days difference at start (for holidays/weekends)
+                # allow up to 5 days diff at start
                 start_ok = cache_start <= start_date + pd.Timedelta(days=5)
                 end_ok = cache_end >= end_date - pd.Timedelta(days=5)
                 
                 if start_ok and end_ok:
-                    # Filter to requested date range
+                    # filter to requested date range
                     mask = (cached_data.index >= start) & (cached_data.index <= end)
                     filtered_data = cached_data[mask]
                     if len(filtered_data) >= min_data_points:
@@ -458,12 +449,12 @@ def download_universe(tickers: List[str], start: str, end: str,
     else:
         tickers_to_download = tickers
     
-    # Download missing tickers
+    # download missing tickers
     if tickers_to_download:
         print(f"Downloading {len(tickers_to_download)} tickers from Yahoo Finance...")
         new_data = download_multiple_tickers(tickers_to_download, start, end, max_workers)
         
-        # Save to cache and add to results
+        # save to cache and add to results
         for ticker, data in new_data.items():
             if use_cache:
                 save_ticker_data_to_pickle(ticker, data, cache_dir)
@@ -475,7 +466,7 @@ def download_universe(tickers: List[str], start: str, end: str,
     
     print(f"Successfully loaded data for {len(data_dict)} out of {len(tickers)} tickers")
     
-    # Align data by common dates
+    # align data by common dates
     price_df, volume_df = align_data_by_dates(data_dict, min_data_points)
     
     if price_df.empty:
@@ -483,7 +474,7 @@ def download_universe(tickers: List[str], start: str, end: str,
     
     print(f"Final universe: {len(price_df.columns)} tickers, {len(price_df)} days")
     
-    # Create PriceData object
+    # create PriceData object
     return PriceData(
         tickers=list(price_df.columns),
         dates=price_df.index,
@@ -494,15 +485,15 @@ def download_universe(tickers: List[str], start: str, end: str,
 
 def download_benchmark_data(benchmark_tickers: List[str], start: str, end: str) -> Dict[str, pd.Series]:
     """
-    Download benchmark data for comparison.
+    Download benchmark data.
     
     Args:
-        benchmark_tickers: List of benchmark ticker symbols (e.g., ['SPY', 'IWV'])
-        start: Start date in 'YYYY-MM-DD' format
-        end: End date in 'YYYY-MM-DD' format
+        benchmark_tickers: list of benchmark symbols (e.g., ['SPY'])
+        start: start date in 'YYYY-MM-DD'
+        end: end date in 'YYYY-MM-DD'
         
     Returns:
-        Dictionary mapping benchmark name to price series
+        dict mapping benchmark name to price series
         
     Example:
         >>> benchmarks = download_benchmark_data(['SPY', 'IWV'], '2020-01-01', '2020-12-31')
@@ -528,7 +519,7 @@ def save_price_data(price_data: PriceData, filepath: str):
     
     Args:
         price_data: PriceData object to save
-        filepath: Path to save the data (should end with .pkl)
+        filepath: path to save data (should end with .pkl)
         
     Example:
         >>> save_price_data(price_data, 'data/processed/price_data.pkl')
@@ -553,7 +544,7 @@ def load_price_data(filepath: str) -> PriceData:
     Load PriceData object from disk.
     
     Args:
-        filepath: Path to the saved data file
+        filepath: path to saved data file
         
     Returns:
         PriceData object
@@ -576,25 +567,24 @@ def load_price_data(filepath: str) -> PriceData:
 
 def get_sp500_tickers() -> List[str]:
     """
-    Get current S&P 500 ticker list from Wikipedia.
+    Get current S&P 500 tickers from Wikipedia.
     
     Returns:
-        List of S&P 500 ticker symbols
+        list of S&P 500 ticker symbols
         
     Example:
         >>> sp500_tickers = get_sp500_tickers()
-        >>> len(sp500_tickers)  # Should be around 500
     """
     try:
-        # Read S&P 500 list from Wikipedia
+        # read S&P 500 list from Wikipedia
         url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
         tables = pd.read_html(url)
         sp500_table = tables[0]
         
-        # Extract ticker symbols and clean them
+        # extract and clean tickers
         tickers = sp500_table['Symbol'].tolist()
         
-        # Replace any special characters that might cause issues
+        # replace special characters
         tickers = [ticker.replace('.', '-') for ticker in tickers]
         
         print(f"Retrieved {len(tickers)} S&P 500 tickers")
@@ -602,7 +592,7 @@ def get_sp500_tickers() -> List[str]:
         
     except Exception as e:
         print(f"Error retrieving S&P 500 tickers: {e}")
-        # Fallback to a static list of major stocks
+        # fallback to a static list
         return [
             'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'TSLA', 'META', 'NVDA', 'BRK-B',
             'UNH', 'JNJ', 'JPM', 'V', 'PG', 'XOM', 'HD', 'CVX', 'MA', 'PFE',
@@ -615,16 +605,15 @@ def get_sp500_tickers() -> List[str]:
 
 def create_sp100_list() -> List[str]:
     """
-    Create a representative S&P 100 list since it's not directly available.
+    Create a representative S&P 100 list.
     
     Returns:
-        List of approximately 100 large-cap ticker symbols
+        list of ~100 large-cap ticker symbols
         
     Example:
         >>> sp100_tickers = create_sp100_list()
-        >>> len(sp100_tickers)  # Should be around 100
     """
-    # Top 100 stocks by market cap (approximate S&P 100)
+    # top 100 stocks by market cap (approx S&P 100)
     sp100_tickers = [
         'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'TSLA', 'META', 'NVDA', 'BRK-B',
         'UNH', 'JNJ', 'JPM', 'V', 'PG', 'XOM', 'HD', 'CVX', 'MA', 'PFE',
@@ -646,27 +635,26 @@ def create_sp100_list() -> List[str]:
 
 def create_sp100_since_2010() -> List[str]:
     """
-    Create a list of the 60 largest stocks that have been in the S&P 100 since 2010-01-01, plus Tesla.
+    Create list of 60 largest stocks in S&P 100 since 2010, plus Tesla.
     
-    This is a curated list based on historical S&P 100 membership and current market capitalization.
+    This is a curated list.
     
     Returns:
-        List of 61 ticker symbols (60 largest S&P 100 stocks since 2010 + TSLA)
+        list of 61 ticker symbols
     """
-    # These are stocks that have been consistently in the S&P 100 since 2010
-    # Ordered approximately by current market cap
+    # stocks consistently in S&P 100 since 2010
     sp100_since_2010 = [
-        'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'BRK-B',  # Mega caps
-        'UNH', 'JNJ', 'JPM', 'V', 'PG', 'XOM', 'HD', 'CVX', 'MA', 'PFE',  # Large caps
+        'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'BRK-B',  # mega caps
+        'UNH', 'JNJ', 'JPM', 'V', 'PG', 'XOM', 'HD', 'CVX', 'MA', 'PFE',  # large caps
         'BAC', 'ABBV', 'KO', 'LLY', 'PEP', 'TMO', 'COST', 'WMT',
         'DIS', 'ABT', 'VZ', 'ACN', 'CMCSA', 'NKE', 'TXN', 'LIN',
         'ORCL', 'ADBE', 'CRM', 'MDT', 'PM', 'BMY', 'T', 'HON',
         'QCOM', 'LOW', 'UPS', 'AMD', 'C', 'RTX', 'INTU', 'CAT',
         'AMGN', 'DE', 'GS', 'MO', 'AXP', 'BLK', 'GILD', 'MDLZ',
-        'MMM', 'CVS', 'SO'  # 59 stocks total (removed DUK to make room for TSLA)
+        'MMM', 'CVS', 'SO'
     ]
     
-    # Add Tesla (not in S&P 100 until later but requested to be included)
+    # add Tesla
     if 'TSLA' not in sp100_since_2010:
         sp100_since_2010.append('TSLA')
     
@@ -675,21 +663,20 @@ def create_sp100_since_2010() -> List[str]:
 
 
 def save_ticker_data_to_pickle(ticker: str, data: pd.DataFrame, output_dir: str = "data/raw"):
-    """Save individual ticker data to a pickle file."""
+    """save individual ticker data to a pickle file."""
     os.makedirs(output_dir, exist_ok=True)
     
-    # Create filename with ticker and a simple .pkl extension
-    # We don't need date ranges in the name anymore, we'll find the right file by ticker
+    # create filename with ticker and .pkl extension
     filename = f"{ticker}.pkl"
     filepath = os.path.join(output_dir, filename)
     
-    # Save to pickle
+    # save to pickle
     data.to_pickle(filepath)
     return filepath
 
 
 def load_ticker_data_from_pickle(ticker: str, output_dir: str = "data/raw") -> Optional[pd.DataFrame]:
-    """Load ticker data from a pickle file if it exists."""
+    """load ticker data from a pickle file if it exists."""
     filename = f"{ticker}.pkl"
     filepath = os.path.join(output_dir, filename)
     
@@ -699,7 +686,7 @@ def load_ticker_data_from_pickle(ticker: str, output_dir: str = "data/raw") -> O
             return df
         except Exception as e:
             print(f"Error loading pickle cache file {filepath}: {e}")
-            # Attempt to delete corrupted file so it can be re-downloaded
+            # try to delete corrupted file so it can be re-downloaded
             try:
                 os.remove(filepath)
                 print(f"Removed corrupted cache file: {filepath}")
