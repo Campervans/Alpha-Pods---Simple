@@ -241,7 +241,7 @@ class AlphaEnhancedBacktest:
     
     def _get_rebalance_dates(self, start_date: str, end_date: str) -> List[pd.Timestamp]:
         """Get quarterly rebalance dates."""
-        dates = pd.date_range(start=start_date, end=end_date, freq='Q')
+        dates = pd.date_range(start=start_date, end=end_date, freq='QE')
         return dates.tolist()
     
     def _calculate_performance(self, portfolio_weights: Dict, returns_data: pd.DataFrame,
