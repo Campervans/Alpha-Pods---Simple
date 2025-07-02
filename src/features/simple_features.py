@@ -31,15 +31,7 @@ def calculate_rsi(prices, period: int = 14):
     return rsi
 
 def create_simple_features(prices, volumes):
-    """Create 8 simple technical features for one stock.
-    
-    Args:
-        prices: pd.Series of stock prices
-        volumes: pd.Series of stock volumes
-        
-    Returns:
-        pd.DataFrame with 8 features (including risk-adjusted momentum)
-    """
+
     features = pd.DataFrame(index=prices.index)
     
     # 1-3. momentum (1m, 3m, 6m returns)

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-CVaR/CLEIR Portfolio Optimization GUI
-
-launch the terminal GUI
-installs deps if needed
-"""
+#launch the terminal GUI
 
 import os
 import sys

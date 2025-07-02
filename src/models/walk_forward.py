@@ -17,17 +17,7 @@ class SimpleWalkForward:
         self.fixed_train_end = pd.to_datetime(fixed_train_end)
 
     def train_predict_for_all_assets(self, universe_data, rebalance_dates):
-        """
-        train a model for each asset and generate predictions for each rebalance date.
-        
-        Args:
-            universe_data: dict of DataFrames: {'AAPL': df, 'MSFT': df}
-                where each df has 'close' and 'volume' columns
-            rebalance_dates: list of datetimes
-            
-        Returns:
-            dict: predictions for each rebalance date
-        """
+
         all_predictions = {}
         
         for date in rebalance_dates:

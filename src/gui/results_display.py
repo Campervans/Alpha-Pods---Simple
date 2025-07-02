@@ -10,16 +10,7 @@ def create_performance_comparison_table(
     cleir_metrics: Optional[Dict] = None,
     spy_metrics: Optional[Dict] = None
 ) -> Table:
-    """Create a rich table comparing ML-enhanced, baseline CLEIR, and SPY performance.
-    
-    Args:
-        ml_metrics: ML-enhanced strategy metrics
-        cleir_metrics: Baseline CLEIR metrics (optional)
-        spy_metrics: SPY benchmark metrics (optional)
-        
-    Returns:
-        Rich Table object for display
-    """
+
     table = Table(title="Performance Comparison (2020-2024)", show_header=True, header_style="bold magenta")
     
     # Add columns

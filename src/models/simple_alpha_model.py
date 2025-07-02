@@ -31,10 +31,8 @@ class SimpleAlphaModel:
         
     def predict(self, X):
         """predict returns on new data.
-        
         Args:
             X: pd.DataFrame of features
-            
         Returns:
             np.array of predictions
         """

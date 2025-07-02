@@ -327,20 +327,7 @@ def download_multiple_tickers(tickers: List[str], start: str, end: str,
 
 def align_data_by_dates(data_dict: Dict[str, pd.DataFrame], 
                        min_data_points: int = 100) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Align price and volume data across tickers by common dates.
     
-    Args:
-        data_dict: dict mapping ticker to DataFrame
-        min_data_points: min data points required per ticker
-        
-    Returns:
-        (price_df, volume_df) with aligned dates
-        
-    Example:
-        >>> data_dict = {'AAPL': df1, 'MSFT': df2}
-        >>> prices, volumes = align_data_by_dates(data_dict, min_data_points=100)
-    """
     if not data_dict:
         return pd.DataFrame(), pd.DataFrame()
     
@@ -396,25 +383,7 @@ def align_data_by_dates(data_dict: Dict[str, pd.DataFrame],
 def download_universe(tickers: List[str], start: str, end: str,
                      min_data_points: int = 100, max_workers: int = 5,
                      use_cache: bool = True, cache_dir: str = "data/raw") -> PriceData:
-    """
-    Download and validate price data for multiple tickers.
-    
-    Args:
-        tickers: list of ticker symbols
-        start: start date in 'YYYY-MM-DD'
-        end: end date in 'YYYY-MM-DD'
-        min_data_points: min data points required per ticker
-        max_workers: max number of parallel downloads
-        use_cache: whether to use cached data
-        cache_dir: directory to save/load cached data
-        
-    Returns:
-        PriceData object with validated and aligned data
-        
-    Example:
-        >>> tickers = ['AAPL', 'MSFT', 'GOOGL']
-        >>> price_data = download_universe(tickers, '2020-01-01', '2020-12-31')
-    """
+ 
     print(f"Downloading data for {len(tickers)} tickers from {start} to {end}")
     
     data_dict = {}
@@ -484,20 +453,7 @@ def download_universe(tickers: List[str], start: str, end: str,
 
 
 def download_benchmark_data(benchmark_tickers: List[str], start: str, end: str) -> Dict[str, pd.Series]:
-    """
-    Download benchmark data.
-    
-    Args:
-        benchmark_tickers: list of benchmark symbols (e.g., ['SPY'])
-        start: start date in 'YYYY-MM-DD'
-        end: end date in 'YYYY-MM-DD'
-        
-    Returns:
-        dict mapping benchmark name to price series
-        
-    Example:
-        >>> benchmarks = download_benchmark_data(['SPY', 'IWV'], '2020-01-01', '2020-12-31')
-    """
+ 
     print(f"Downloading benchmark data for {benchmark_tickers}")
     
     benchmark_data = {}
@@ -514,16 +470,7 @@ def download_benchmark_data(benchmark_tickers: List[str], start: str, end: str) 
 
 
 def save_price_data(price_data: PriceData, filepath: str):
-    """
-    Save PriceData object to disk.
-    
-    Args:
-        price_data: PriceData object to save
-        filepath: path to save data (should end with .pkl)
-        
-    Example:
-        >>> save_price_data(price_data, 'data/processed/price_data.pkl')
-    """
+ 
     import pickle
     
     data_to_save = {
@@ -540,18 +487,7 @@ def save_price_data(price_data: PriceData, filepath: str):
 
 
 def load_price_data(filepath: str) -> PriceData:
-    """
-    Load PriceData object from disk.
-    
-    Args:
-        filepath: path to saved data file
-        
-    Returns:
-        PriceData object
-        
-    Example:
-        >>> price_data = load_price_data('data/processed/price_data.pkl')
-    """
+
     import pickle
     
     with open(filepath, 'rb') as f:
@@ -566,15 +502,7 @@ def load_price_data(filepath: str) -> PriceData:
 
 
 def get_sp500_tickers() -> List[str]:
-    """
-    Get current S&P 500 tickers from Wikipedia.
-    
-    Returns:
-        list of S&P 500 ticker symbols
-        
-    Example:
-        >>> sp500_tickers = get_sp500_tickers()
-    """
+ 
     try:
         # read S&P 500 list from Wikipedia
         url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
@@ -604,15 +532,7 @@ def get_sp500_tickers() -> List[str]:
 
 
 def create_sp100_list() -> List[str]:
-    """
-    Create a representative S&P 100 list.
-    
-    Returns:
-        list of ~100 large-cap ticker symbols
-        
-    Example:
-        >>> sp100_tickers = create_sp100_list()
-    """
+
     # top 100 stocks by market cap (approx S&P 100)
     sp100_tickers = [
         'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'TSLA', 'META', 'NVDA', 'BRK-B',
@@ -634,14 +554,7 @@ def create_sp100_list() -> List[str]:
 
 
 def create_sp100_since_2010() -> List[str]:
-    """
-    Create list of 60 largest stocks in S&P 100 since 2010, plus Tesla.
-    
-    This is a curated list.
-    
-    Returns:
-        list of 61 ticker symbols
-    """
+
     # stocks consistently in S&P 100 since 2010
     sp100_since_2010 = [
         'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'NVDA', 'BRK-B',  # mega caps

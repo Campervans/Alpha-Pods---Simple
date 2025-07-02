@@ -24,17 +24,7 @@ def create_cleir_problem(
     benchmark_returns: np.ndarray,
     config: OptimizationConfig
 ) -> Tuple[cp.Problem, cp.Variable, cp.Variable, cp.Variable, cp.Variable]:
-    """
-    Create the CLEIR linear programming problem.
-    
-    Args:
-        asset_returns: historical asset returns (n_periods x n_assets)
-        benchmark_returns: historical benchmark returns (n_periods,)
-        config: optimization config with sparsity_bound
-        
-    Returns:
-        (problem, weights, zeta, z, u)
-    """
+
     n_periods, n_assets = asset_returns.shape
     
     if len(benchmark_returns) != n_periods:
@@ -95,18 +85,7 @@ def solve_cleir(
     config: OptimizationConfig,
     verbose: bool = False
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
-    """
-    Solve the CLEIR optimization problem.
-    
-    Args:
-        asset_returns: historical asset returns (n_periods x n_assets)
-        benchmark_returns: historical benchmark returns (n_periods,)
-        config: optimization config
-        verbose: whether to print solver output
-        
-    Returns:
-        (optimal_weights, solver_info)
-    """
+
     if asset_returns.shape[0] < 10:
         raise ValueError("Need at least 10 observations")
     
@@ -287,12 +266,7 @@ def solve_cvar_with_tracking(
     config: OptimizationConfig,
     verbose: bool = False
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
-    """
-    Solve CVaR optimization with tracking error (wrapper for CLEIR).
-    
-    compatibility wrapper that calls CLEIR with a high sparsity bound
-    to effectively remove the sparsity constraint.
-    """
+
     # create a modified config with high sparsity bound
     import copy
     cleir_config = copy.deepcopy(config)

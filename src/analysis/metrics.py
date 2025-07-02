@@ -6,23 +6,7 @@ from typing import Dict, Any, Union
 
 
 def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
-    """pulls standard metrics from any strategy result.
-    
-    Args:
-        results: dict with strategy results, needs one of:
-            - 'daily_values' or 'index_values': pd.Series of portfolio values
-            - can also have 'returns', 'volatility', 'sharpe_ratio', etc.
-    
-    Returns:
-        dict with the usual metrics:
-            - total_return: Total return over period
-            - annual_return: Annualized return
-            - volatility: Annualized volatility
-            - sharpe_ratio: Sharpe ratio (0% risk-free rate)
-            - max_drawdown: Maximum drawdown (positive value)
-            - avg_turnover: Average portfolio turnover
-            - transaction_costs: Total transaction costs
-    """
+
     metrics = {}
     
     # daily values series
@@ -110,19 +94,7 @@ def summarise_results(results: Dict[str, Any]) -> Dict[str, float]:
 
 def calculate_relative_metrics(strategy_metrics: Dict[str, float], 
                              benchmark_metrics: Dict[str, float]) -> Dict[str, float]:
-    """compare strategy to a benchmark.
-    
-    Args:
-        strategy_metrics: metrics for our strat
-        benchmark_metrics: metrics for the benchmark
-    
-    Returns:
-        dict with relative metrics:
-            - excess_return: annual return diff
-            - tracking_error: vol of return diffs
-            - information_ratio: excess return / tracking error
-            - relative_drawdown: diff in max drawdowns
-    """
+
     relative = {}
     
     # excess return
@@ -157,15 +129,7 @@ def calculate_relative_metrics(strategy_metrics: Dict[str, float],
 
 
 def format_metric_for_display(value: float, metric_type: str) -> str:
-    """make a metric look nice for the GUI
-    
-    Args:
-        value: the metric value
-        metric_type: type of metric ('return', 'ratio', etc)
-    
-    Returns:
-        formatted string
-    """
+
     if metric_type in ['total_return', 'annual_return', 'volatility', 
                        'max_drawdown', 'avg_turnover', 'transaction_costs',
                        'excess_return', 'tracking_error', 'relative_drawdown']:
