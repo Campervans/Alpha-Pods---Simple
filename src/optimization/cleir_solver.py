@@ -1,6 +1,5 @@
-"""
-CVaR-LASSO Enhanced Index Replication (CLEIR) solver.
 
+# CVaR-LASSO Enhanced Index Replication (CLEIR) solver.
 # implements CLEIR optimization as a linear program:
 # - minimize CVaR of tracking error
 # - subject to L1 norm constraint on weights (sparsity)
