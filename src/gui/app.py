@@ -62,9 +62,8 @@ class CVaRGUI:
         options = [
             "TASK A - Run CLEIR Optimization",
             "TASK A - Run CVaR Optimization",
-            "TASK B - ML-Enhanced CLEIR (60 stocks, 2014-2019 training)",
+            "TASK B - ML-Enhanced CLEIR (Train: 2014-2019, Test: 2020-2024)",
             "TASK A&B - View Results",
-            "Strategy Comparison Dashboard (ML vs Baseline vs SPY)",
             "Data Management",
             "About",
             "Exit"
@@ -81,12 +80,10 @@ class CVaRGUI:
         elif choice == "4":
             self.view_results()
         elif choice == "5":
-            self.run_strategy_comparison()
-        elif choice == "6":
             self.data_management_menu()
-        elif choice == "7":
+        elif choice == "6":
             self.show_about()
-        elif choice == "8":
+        elif choice == "7":
             self.running = False
             show_info("Goodbye!")
     
@@ -219,27 +216,28 @@ class CVaRGUI:
         info_text.append("This feature enhances the CLEIR optimization with machine learning:\n\n", style="bold")
         info_text.append("• Uses Ridge regression to predict 3-month returns\n")
         info_text.append("• Features: momentum, volatility, volume, RSI, and risk-adjusted momentum\n")
-        info_text.append("• Selects top 60 stocks based on alpha predictions (expanded from 30)\n")
-        info_text.append("• Training: 2014-2019 (fixed window)\n")
-        info_text.append("• Testing: 2020-2024 (out-of-sample)\n")
-        info_text.append("• Applies CLEIR optimization to the selected universe\n")
+        info_text.append("• Selects top 60 stocks based on alpha predictions\n")
+        info_text.append("\n", style="bold")
+        info_text.append("Fixed Date Ranges:\n", style="bold yellow")
+        info_text.append("• Training Period: 2014-2019 (in-sample)\n", style="yellow")
+        info_text.append("• Testing Period: 2020-2024 (out-of-sample)\n", style="yellow")
+        info_text.append("\n")
         info_text.append("• Walk-forward training prevents look-ahead bias\n")
+        info_text.append("• Applies CLEIR optimization to the ML-selected universe\n")
         
         console.print(Panel(info_text, title="ML Enhancement Overview", border_style="cyan"))
         console.print()
         
-        # Get parameters
-        config = {
-            'start_date': get_text_input("Start date", default="2020-01-01"),
-            'end_date': get_text_input("End date", default="2024-12-31"),
-            'top_k': int(get_text_input("Number of stocks to select", default="60")),
-            'train_years': int(get_text_input("Training window (years)", default="3")),
-            'rebalance_freq': get_text_input("Rebalance frequency", default="quarterly")
+        # Show fixed configuration
+        config_display = {
+            'Out-of-Sample Test Period': '2020-01-01 to 2024-12-31',
+            'Training Window': '3 years (rolling)',
+            'Number of Stocks': '60',
+            'Rebalance Frequency': 'Quarterly'
         }
         
-        # Show config summary
-        console.print("\n")
-        console.print(create_data_table("ML Configuration", config))
+        console.print(create_data_table("ML Configuration (Fixed)", config_display))
+        console.print("\n[dim]Note: The ML backtest uses fixed date ranges for reproducibility.[/dim]\n")
         
         if confirm_action("\nProceed with ML-enhanced optimization?"):
             show_info("Running ML-enhanced backtest... This may take several minutes.")
@@ -328,8 +326,8 @@ class CVaRGUI:
                         
                         # Don't add default values - let table display "—" for missing metrics
                         
-                        # Calculate SPY metrics
-                        spy_metrics = calculate_spy_metrics(config['start_date'], config['end_date'])
+                        # Calculate SPY metrics for the fixed test period
+                        spy_metrics = calculate_spy_metrics('2020-01-01', '2024-12-31')
                         
                         # Try to load baseline CLEIR metrics
                         cleir_metrics = None
@@ -338,7 +336,7 @@ class CVaRGUI:
                             if cleir_path.exists():
                                 cleir_df = pd.read_csv(cleir_path, index_col=0, parse_dates=True)
                                 # Filter to same date range
-                                cleir_df = cleir_df.loc[config['start_date']:config['end_date']]
+                                cleir_df = cleir_df.loc['2020-01-01':'2024-12-31']
                                 if len(cleir_df) > 0:
                                     cleir_returns = cleir_df.squeeze().pct_change().dropna()
                                     cleir_metrics = {
@@ -402,41 +400,6 @@ class CVaRGUI:
                     except:
                         pass  # Task might already be removed
                     show_error(f"Error running ML enhancement: {str(e)}")
-        
-        console.input("\nPress Enter to continue...")
-    
-    def run_strategy_comparison(self):
-        """Run strategy comparison dashboard."""
-        from .controllers import ComparisonController
-        
-        clear_screen()
-        console.print(create_header("Strategy Comparison Dashboard"))
-        
-        # Get parameters
-        start_date = get_text_input("Start date", default="2020-01-01")
-        end_date = get_text_input("End date", default="2024-12-31")
-        force_refresh = confirm_action("Force recalculation of cached results?", default=False)
-        
-        # Create comparison controller
-        comparison_controller = ComparisonController()
-        
-        # Run comparison
-        try:
-            results = comparison_controller.run_comparison(
-                start_date=start_date,
-                end_date=end_date,
-                force_refresh=force_refresh
-            )
-            
-            if results:
-                console.print("\n[green]✓ Comparison completed successfully![/green]")
-            else:
-                console.print("\n[yellow]No results to display. Run ML-Enhanced CLEIR first.[/yellow]")
-                
-        except Exception as e:
-            show_error(f"Error running comparison: {str(e)}")
-            import traceback
-            console.print("\n[dim]" + traceback.format_exc() + "[/dim]")
         
         console.input("\nPress Enter to continue...")
     
