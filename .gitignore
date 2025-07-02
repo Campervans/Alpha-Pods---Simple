@@ -217,5 +217,7 @@ __marimo__/
 # Ignore results folder
 results/
 
-# Ignore scripts folder
+# Ignore scripts folder but allow specific files
 scripts/
+!scripts/generate_performance_comparison_plots.py
+!scripts/generate_final_results.py
