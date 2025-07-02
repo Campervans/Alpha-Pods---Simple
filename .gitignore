@@ -217,8 +217,7 @@ script.md
 # Ignore all pickle files (data files)
 *.pkl
 
-# Ignore results folder
-results/
+# Results folder is now tracked
 
 # Ignore scripts folder but allow specific files
 scripts/

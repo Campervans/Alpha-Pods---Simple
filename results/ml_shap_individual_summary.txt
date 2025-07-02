@@ -1,0 +1,27 @@
+# Individual Model SHAP Feature Importance
+
+Analysis of 60 models
+
+## Top Features Globally
+1. return_6m: 0.0617
+2. risk_adj_momentum_6m: 0.0541
+3. return_3m: 0.0111
+4. return_1m: 0.0095
+5. volatility_3m: 0.0087
+6. volatility_1m: 0.0080
+7. rsi: 0.0056
+8. volume_ratio: 0.0013
+
+## Stocks with Unique Feature Preferences
+
+**AAPL**: Prefers return_3m (0.014) vs global top return_6m
+
+**ABBV**: Prefers risk_adj_momentum_6m (0.201) vs global top return_6m
+
+**ADBE**: Prefers risk_adj_momentum_6m (0.022) vs global top return_6m
+
+**AMGN**: Prefers risk_adj_momentum_6m (0.073) vs global top return_6m
+
+**AMZN**: Prefers risk_adj_momentum_6m (0.027) vs global top return_6m
+
+**AVGO**: Prefers risk_adj_momentum_6m (0.051) vs global top return_6m
