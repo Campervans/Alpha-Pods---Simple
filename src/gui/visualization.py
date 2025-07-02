@@ -196,34 +196,34 @@ def plot_index_comparison(cleir_csv_path: str = "results/cleir_index_gui.csv",
             'final_value': equal_weight_aligned.iloc[-1]
         }
     
-    # Create terminal plot
-    plt.clf()  # Clear any existing plot
-    plt.theme('dark')  # Use dark theme for better terminal visibility
-    
-    # Convert dates to numeric for plotting (days since start)
-    days_since_start = (common_dates - common_dates[0]).days
-    
-    # Plot lines
-    plt.plot(days_since_start, cleir_aligned.values, label='CLEIR Index', color='green')
-    plt.plot(days_since_start, spy_normalized.values, label=f'{benchmark_ticker} (Cap-Weighted)', color='cyan')
-    
-    if equal_weight_aligned is not None:
-        plt.plot(days_since_start, equal_weight_aligned.values, label='Equal-Weighted', color='yellow')
-    
-    # Formatting
-    plt.title(f'Performance Comparison: CLEIR vs Benchmarks')
-    plt.xlabel('Days Since Start')
-    plt.ylabel('Index Value')
-    
-    # Add grid for better readability
-    plt.grid(True, True)
-    
-    # Set size for terminal display (reverted to original size)
-    plt.plotsize(100, 30)
+    # Create terminal plot - commented out to disable chart display
+    # plt.clf()  # Clear any existing plot
+    # plt.theme('dark')  # Use dark theme for better terminal visibility
+    # 
+    # # Convert dates to numeric for plotting (days since start)
+    # days_since_start = (common_dates - common_dates[0]).days
+    # 
+    # # Plot lines
+    # plt.plot(days_since_start, cleir_aligned.values, label='CLEIR Index', color='green')
+    # plt.plot(days_since_start, spy_normalized.values, label=f'{benchmark_ticker} (Cap-Weighted)', color='cyan')
+    # 
+    # if equal_weight_aligned is not None:
+    #     plt.plot(days_since_start, equal_weight_aligned.values, label='Equal-Weighted', color='yellow')
+    # 
+    # # Formatting
+    # plt.title(f'Performance Comparison: CLEIR vs Benchmarks')
+    # plt.xlabel('Days Since Start')
+    # plt.ylabel('Index Value')
+    # 
+    # # Add grid for better readability
+    # plt.grid(True, True)
+    # 
+    # # Set size for terminal display (reverted to original size)
+    # plt.plotsize(100, 30)
     
     # Show the plot
-    console.print("\n[bold cyan]Performance Comparison Chart[/bold cyan]")
-    plt.show()
+    # console.print("\n[bold cyan]Performance Comparison Chart[/bold cyan]")
+    # plt.show()
     
     # Create comparison table
     table = Table(title="Performance Comparison", box=box.ROUNDED)
