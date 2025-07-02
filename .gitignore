@@ -207,8 +207,12 @@ marimo/_lsp/
 __marimo__/
 
 # Project-specific ignores
-# Ignore all markdown files except README.md and those in results/ and data/ folders
+# Ignore all markdown files except README.md
 *.md
 !README.md
-!results/*.md
-!data/*.md
+
+# Ignore all pickle files (data files)
+*.pkl
+
+# Ignore results folder
+results/
